@@ -96,6 +96,23 @@ un seul niveau de dossier est lu (jamais de récursion), le hachage SHA-256 des
 doublons ne s'exécute que sur des fichiers de même taille, et le rangement
 intelligent ne fait que comparer des noms (aucune lecture de contenu).
 
+## Auditer vos dossiers avant de personnaliser les règles
+
+[`Scripts/audit-filetidy.sh`](Scripts/audit-filetidy.sh) est un script de diagnostic,
+en lecture seule (il ne déplace ni ne supprime jamais rien), à exécuter directement
+sur votre Mac :
+
+```bash
+bash Scripts/audit-filetidy.sh
+```
+
+Il analyse la racine de Bureau, Téléchargements et Documents et produit un rapport
+Markdown (répartition par type, doublons potentiels, fichiers `.torrent`, archives
+`.zip` déjà décompressées, fichiers anciens, sous-dossiers déjà existants, mots les
+plus fréquents dans les noms de fichiers). Ce rapport aide à calibrer les extensions
+de `FileCategory.swift` et les mots-clés de `SmartOrganizer.swift` sur vos données
+réelles plutôt que sur des hypothèses.
+
 ## Limites connues (v1)
 
 - La détection "archive déjà décompressée" est heuristique (nom de fichier/dossier
