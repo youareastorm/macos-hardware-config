@@ -70,8 +70,8 @@ final class OrganizerViewModel: ObservableObject {
                 let allNames = Set(scanned.map { $0.url.lastPathComponent })
                 let files = scanned.filter { !$0.isDirectory }
 
-                var moves: [ScanItem] = []
                 var cleanups: [ScanItem] = []
+                var toOrganize: [ScannedFile] = []
 
                 for file in files {
                     if CleanupAdvisor.isTorrent(file) {
@@ -88,11 +88,17 @@ final class OrganizerViewModel: ObservableObject {
                         ))
                         continue
                     }
-                    let category = FileCategory.category(forExtension: file.url.pathExtension)
-                    moves.append(ScanItem(
+                    toOrganize.append(file)
+                }
+
+                let existingFolders = FolderIndexer.index(rootContents: scanned)
+                let destinations = SmartOrganizer.plan(for: toOrganize, existingFolders: existingFolders)
+                var moves: [ScanItem] = toOrganize.compactMap { file in
+                    guard let destination = destinations[file.url] else { return nil }
+                    return ScanItem(
                         url: file.url, size: file.size, modificationDate: file.modificationDate,
-                        action: .move(to: category), isSelected: true
-                    ))
+                        action: .move(to: destination), isSelected: true
+                    )
                 }
 
                 let rawDuplicates = DuplicateFinder.findDuplicates(among: files)
@@ -136,9 +142,9 @@ final class OrganizerViewModel: ObservableObject {
         var failed = 0
 
         for item in moveItems where item.isSelected {
-            if case .move(let category) = item.action {
+            if case .move(let destination) = item.action {
                 do {
-                    try FileOperationService.moveFile(item.url, toCategoryFolder: category.folderName, in: folder.url)
+                    try FileOperationService.moveFile(item.url, toRelativePath: destination.relativePath, in: folder.url)
                     moved += 1
                 } catch {
                     failed += 1

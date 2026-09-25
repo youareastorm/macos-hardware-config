@@ -3,7 +3,7 @@ import Foundation
 /// What FileTidy proposes to do with a given file. The user decides whether
 /// this actually happens via the checkbox on each row (`ScanItem.isSelected`).
 enum ProposedAction {
-    case move(to: FileCategory)
+    case move(to: MoveDestination)
     case deleteTorrent
     case deleteExtractedArchive
 }

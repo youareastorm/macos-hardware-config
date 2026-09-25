@@ -3,9 +3,13 @@ import Foundation
 /// Performs the actual filesystem changes. Deletions always go through the Trash
 /// (`FileManager.trashItem`) so every action stays reversible from the Finder.
 enum FileOperationService {
-    static func moveFile(_ url: URL, toCategoryFolder folderName: String, in root: URL) throws {
+    /// `relativePath` may contain several segments (e.g. "Documents/Factures") to
+    /// reuse or create a folder nested inside a category folder.
+    static func moveFile(_ url: URL, toRelativePath relativePath: String, in root: URL) throws {
         let fm = FileManager.default
-        let destDir = root.appendingPathComponent(folderName, isDirectory: true)
+        let destDir = relativePath
+            .split(separator: "/")
+            .reduce(root) { $0.appendingPathComponent(String($1), isDirectory: true) }
         if !fm.fileExists(atPath: destDir.path) {
             try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
         }
