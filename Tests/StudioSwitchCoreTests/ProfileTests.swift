@@ -9,10 +9,11 @@ final class ProfileTests: XCTestCase {
             {
               "name": "Home",
               "deviceNameMatch": "Apollo Solo",
+              "audioDeviceName": "Universal Audio Thunderbolt",
               "uadConsoleSession": "~/Documents/Universal Audio/Sessions/home guit vox.uadmix",
               "useIACDriver": false,
               "daws": [
-                { "name": "Logic Pro", "bundleID": "com.apple.logic10", "templatePath": null }
+                { "name": "Logic Pro", "bundleID": "com.apple.logic10", "appPath": null, "templatePath": null }
               ]
             }
           ]
@@ -24,7 +25,9 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(decoded.profiles.count, 1)
         XCTAssertEqual(decoded.profiles[0].name, "Home")
         XCTAssertEqual(decoded.profiles[0].deviceNameMatch, "Apollo Solo")
+        XCTAssertEqual(decoded.profiles[0].audioDeviceName, "Universal Audio Thunderbolt")
         XCTAssertEqual(decoded.profiles[0].daws[0].bundleID, "com.apple.logic10")
+        XCTAssertNil(decoded.profiles[0].daws[0].appPath)
         XCTAssertNil(decoded.profiles[0].daws[0].templatePath)
     }
 }

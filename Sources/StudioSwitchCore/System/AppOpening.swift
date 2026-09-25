@@ -22,10 +22,25 @@ public final class WorkspaceAppLauncher: AppLaunching {
     public init() {}
 
     public func launchApplication(at appURL: URL) throws {
-        NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
+        try Self.awaitCompletion { completion in
+            NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: completion)
+        }
     }
 
     public func open(fileURL: URL, withApplicationAt appURL: URL) throws {
-        NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        try Self.awaitCompletion { completion in
+            NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: completion)
+        }
+    }
+
+    private static func awaitCompletion(_ operation: (@escaping (NSRunningApplication?, Error?) -> Void) -> Void) throws {
+        let semaphore = DispatchSemaphore(value: 0)
+        var launchError: Error?
+        operation { _, error in
+            launchError = error
+            semaphore.signal()
+        }
+        semaphore.wait()
+        if let launchError { throw launchError }
     }
 }

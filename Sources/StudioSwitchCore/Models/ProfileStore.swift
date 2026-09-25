@@ -15,6 +15,7 @@ public final class ProfileStore {
         Profile(
             name: "Home",
             deviceNameMatch: "Apollo Solo",
+            audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "~/Documents/Universal Audio/Sessions/home guit vox.uadmix",
             useIACDriver: false,
             daws: [
@@ -25,6 +26,7 @@ public final class ProfileStore {
         Profile(
             name: "Studio",
             deviceNameMatch: "Apollo",
+            audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "~/Documents/Universal Audio/Sessions/octo.uadmix",
             useIACDriver: false,
             daws: [

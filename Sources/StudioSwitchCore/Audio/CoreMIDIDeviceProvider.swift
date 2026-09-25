@@ -21,10 +21,10 @@ public final class CoreMIDIDeviceProvider: MIDIDeviceProviding {
     private func iacDriverDevice() -> MIDIDeviceRef? {
         for index in 0..<MIDIGetNumberOfDevices() {
             let device = MIDIGetDevice(index)
-            var nameRef: Unmanaged<CFString>?
-            guard MIDIObjectGetStringProperty(device, kMIDIPropertyName, &nameRef) == noErr,
-                  let name = nameRef?.takeRetainedValue() as String?,
-                  name == "IAC Driver" else { continue }
+            var ownerRef: Unmanaged<CFString>?
+            guard MIDIObjectGetStringProperty(device, kMIDIPropertyDriverOwner, &ownerRef) == noErr,
+                  let owner = ownerRef?.takeRetainedValue() as String?,
+                  owner == "com.apple.AppleMIDIIACDriver" else { continue }
             return device
         }
         return nil

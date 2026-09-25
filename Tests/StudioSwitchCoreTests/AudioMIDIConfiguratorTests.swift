@@ -14,10 +14,14 @@ private final class MockAudioDeviceProvider: AudioDeviceProviding {
 
 private final class MockMIDIDeviceProvider: MIDIDeviceProviding {
     var present: Bool
+    var enableError: Error?
     private(set) var enableCallCount = 0
     init(present: Bool) { self.present = present }
     func iacDriverIsPresent() -> Bool { present }
-    func enableIACDriver() throws { enableCallCount += 1 }
+    func enableIACDriver() throws {
+        enableCallCount += 1
+        if let enableError { throw enableError }
+    }
 }
 
 final class AudioMIDIConfiguratorTests: XCTestCase {
@@ -44,7 +48,7 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         }
     }
 
-    func test_enableIACDriverIfPresent_enablesWhenPresent() throws {
+    func test_enableIACDriverIfPresent_enablesDriver() throws {
         let midiProvider = MockMIDIDeviceProvider(present: true)
         let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
 
@@ -53,12 +57,13 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         XCTAssertEqual(midiProvider.enableCallCount, 1)
     }
 
-    func test_enableIACDriverIfPresent_doesNothingWhenAbsent() throws {
+    func test_enableIACDriverIfPresent_throwsWhenDriverAbsent() {
         let midiProvider = MockMIDIDeviceProvider(present: false)
+        midiProvider.enableError = CoreMIDIError.iacDriverNotFound
         let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
 
-        try configurator.enableIACDriverIfPresent()
-
-        XCTAssertEqual(midiProvider.enableCallCount, 0)
+        XCTAssertThrowsError(try configurator.enableIACDriverIfPresent()) { error in
+            XCTAssertEqual(error as? CoreMIDIError, .iacDriverNotFound)
+        }
     }
 }

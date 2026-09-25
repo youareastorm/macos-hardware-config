@@ -7,6 +7,7 @@ struct MenuBarView: View {
     @State private var activeProfile: Profile?
     @State private var lastResult: ProfileActivationResult?
     @State private var loadError: String?
+    @State private var dawLaunchMessage: String?
 
     private let profileStore = ProfileStore()
     private let activationController = ProfileActivationController(
@@ -22,8 +23,9 @@ struct MenuBarView: View {
                 Text("Erreur de config : \(loadError)").foregroundStyle(.red)
             }
 
-            ForEach(profiles, id: \.name) { profile in
+            ForEach(Array(profiles.enumerated()), id: \.offset) { _, profile in
                 Button(profile.name) {
+                    dawLaunchMessage = nil
                     lastResult = activationController.activate(profile)
                     activeProfile = lastResult?.deviceDetected == true ? profile : nil
                 }
@@ -36,10 +38,13 @@ struct MenuBarView: View {
 
             if let activeProfile {
                 Divider()
-                ForEach(activeProfile.daws, id: \.bundleID) { daw in
+                ForEach(Array(activeProfile.daws.enumerated()), id: \.offset) { _, daw in
                     Button(daw.name) {
-                        try? dawLauncher.launch(daw)
+                        launchDAW(daw)
                     }
+                }
+                if let dawLaunchMessage {
+                    Text(dawLaunchMessage).foregroundStyle(.orange)
                 }
             }
 
@@ -57,6 +62,19 @@ struct MenuBarView: View {
             profiles = try profileStore.loadProfiles()
         } catch {
             loadError = "\(error)"
+        }
+    }
+
+    private func launchDAW(_ daw: DAWEntry) {
+        do {
+            switch try dawLauncher.launch(daw) {
+            case .launched:
+                dawLaunchMessage = nil
+            case .launchedWithoutTemplate(let path):
+                dawLaunchMessage = "\(daw.name) lancé sans le template (introuvable : \(path))"
+            }
+        } catch {
+            dawLaunchMessage = "Échec du lancement de \(daw.name) : \(error)"
         }
     }
 

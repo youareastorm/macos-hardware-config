@@ -28,7 +28,6 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
     }
 
     public func enableIACDriverIfPresent() throws {
-        guard midiProvider.iacDriverIsPresent() else { return }
         try midiProvider.enableIACDriver()
     }
 }

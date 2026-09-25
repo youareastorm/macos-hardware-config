@@ -17,13 +17,13 @@ public final class ProfileActivationController {
     }
 
     public func activate(_ profile: Profile) -> ProfileActivationResult {
-        guard let matchedName = detector.matchingDeviceName(for: profile) else {
+        guard detector.matchingDeviceName(for: profile) != nil else {
             return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, uadConsoleError: nil)
         }
 
         var deviceConfigError: String?
         do {
-            try configurator.setDefaultDevice(named: matchedName)
+            try configurator.setDefaultDevice(named: profile.audioDeviceName)
             if profile.useIACDriver {
                 try configurator.enableIACDriverIfPresent()
             }

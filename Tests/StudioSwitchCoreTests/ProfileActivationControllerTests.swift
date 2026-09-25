@@ -11,9 +11,11 @@ private final class MockConfigurator: AudioMIDIConfiguring {
     var enableIACDriverError: Error?
     private(set) var setDefaultDeviceCallCount = 0
     private(set) var enableIACDriverCallCount = 0
+    private(set) var setDefaultDeviceNames: [String] = []
 
     func setDefaultDevice(named deviceName: String) throws {
         setDefaultDeviceCallCount += 1
+        setDefaultDeviceNames.append(deviceName)
         if let error = setDefaultDeviceError { throw error }
     }
 
@@ -36,7 +38,7 @@ private final class MockUADConsole: UADSessionOpening {
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
-    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", uadConsoleSession: "s", useIACDriver: false, daws: [])
+    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: false, daws: [])
 
     func test_activate_shortCircuitsWhenDeviceNotDetected() {
         let configurator = MockConfigurator()
@@ -95,11 +97,22 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertNotNil(result.uadConsoleError)
     }
 
+    func test_activate_routesAudioByProfileAudioDeviceNameNotDetectionMatch() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let configurator = MockConfigurator()
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole())
+
+        _ = controller.activate(profile)
+
+        XCTAssertEqual(configurator.setDefaultDeviceNames, ["Universal Audio Thunderbolt"])
+    }
+
     func test_activate_enablesIACDriverOnlyWhenProfileRequestsIt() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
         let configurator = MockConfigurator()
-        let profileWithIAC = Profile(name: "Home", deviceNameMatch: "Apollo Solo", uadConsoleSession: "s", useIACDriver: true, daws: [])
+        let profileWithIAC = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: true, daws: [])
         let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole())
 
         _ = controller.activate(profileWithIAC)

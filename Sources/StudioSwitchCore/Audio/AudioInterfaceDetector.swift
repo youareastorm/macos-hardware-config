@@ -3,14 +3,14 @@ public protocol DeviceDetecting {
 }
 
 public final class AudioInterfaceDetector: DeviceDetecting {
-    private let provider: AudioDeviceProviding
+    private let provider: HardwareModelProviding
 
-    public init(provider: AudioDeviceProviding = CoreAudioDeviceProvider()) {
+    public init(provider: HardwareModelProviding = ThunderboltHardwareModelProvider()) {
         self.provider = provider
     }
 
     public func matchingDeviceName(for profile: Profile) -> String? {
-        provider.connectedDeviceNames().first {
+        provider.connectedModelNames().first {
             $0.caseInsensitiveCompare(profile.deviceNameMatch) == .orderedSame
         }
     }

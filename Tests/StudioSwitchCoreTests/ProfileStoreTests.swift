@@ -26,14 +26,14 @@ final class ProfileStoreTests: XCTestCase {
     func test_loadProfiles_readsExistingConfig() throws {
         let configURL = tempDirectory.appendingPathComponent("profiles.json")
         let json = """
-        { "profiles": [ { "name": "Custom", "deviceNameMatch": "X", "uadConsoleSession": "s", "useIACDriver": true, "daws": [] } ] }
+        { "profiles": [ { "name": "Custom", "deviceNameMatch": "X", "audioDeviceName": "Y", "uadConsoleSession": "s", "useIACDriver": true, "daws": [] } ] }
         """
         try json.data(using: .utf8)!.write(to: configURL)
         let store = ProfileStore(configURL: configURL)
 
         let profiles = try store.loadProfiles()
 
-        XCTAssertEqual(profiles, [Profile(name: "Custom", deviceNameMatch: "X", uadConsoleSession: "s", useIACDriver: true, daws: [])])
+        XCTAssertEqual(profiles, [Profile(name: "Custom", deviceNameMatch: "X", audioDeviceName: "Y", uadConsoleSession: "s", useIACDriver: true, daws: [])])
     }
 
     func test_loadProfiles_throwsOnMalformedJSON() throws {
