@@ -1,3 +1,4 @@
 .build/
 StudioSwitch.app/
 .DS_Store
+docs/conversations/

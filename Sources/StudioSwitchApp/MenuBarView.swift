@@ -8,6 +8,8 @@ struct MenuBarView: View {
     @State private var lastResult: ProfileActivationResult?
     @State private var loadError: String?
     @State private var dawLaunchMessage: String?
+    @State private var showingNewProfileForm = false
+    @State private var saveError: String?
 
     private let profileStore = ProfileStore()
     private let activationController = ProfileActivationController(
@@ -49,6 +51,25 @@ struct MenuBarView: View {
             }
 
             Divider()
+
+            if showingNewProfileForm {
+                NewProfileFormView(
+                    onCancel: { showingNewProfileForm = false },
+                    onSave: { profile in
+                        saveNewProfile(profile)
+                    }
+                )
+                if let saveError {
+                    Text("Erreur d'enregistrement : \(saveError)").foregroundStyle(.red)
+                }
+            } else {
+                Button("Nouveau profil…") {
+                    saveError = nil
+                    showingNewProfileForm = true
+                }
+            }
+
+            Divider()
             Button("Quitter") {
                 NSApplication.shared.terminate(nil)
             }
@@ -62,6 +83,17 @@ struct MenuBarView: View {
             profiles = try profileStore.loadProfiles()
         } catch {
             loadError = "\(error)"
+        }
+    }
+
+    private func saveNewProfile(_ profile: Profile) {
+        do {
+            try profileStore.save(profile)
+            saveError = nil
+            showingNewProfileForm = false
+            loadProfiles()
+        } catch {
+            saveError = "\(error)"
         }
     }
 

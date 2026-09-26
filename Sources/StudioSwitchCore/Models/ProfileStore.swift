@@ -64,4 +64,17 @@ public final class ProfileStore {
         let data = try encoder.encode(ProfileStore.defaultProfilesFile)
         try data.write(to: configURL)
     }
+
+    public func save(_ profile: Profile) throws {
+        var profiles = try loadProfiles()
+        if let index = profiles.firstIndex(where: { $0.name == profile.name }) {
+            profiles[index] = profile
+        } else {
+            profiles.append(profile)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(ProfilesFile(profiles: profiles))
+        try data.write(to: configURL)
+    }
 }
