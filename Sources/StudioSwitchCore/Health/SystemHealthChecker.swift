@@ -5,17 +5,23 @@ public final class SystemHealthChecker {
     private let midiStatus: MIDIStatusProviding
     private let uadConsoleSession: UADConsoleSessionInspecting
     private let usbPower: USBPowerInspecting
+    private let usbPowerFaultDetector: USBPowerFaultDetecting
+
+    /// How far back the "Alimentation USB" check looks in the kernel log for power-fault signs.
+    private static let usbLogWindow: TimeInterval = 15 * 60
 
     public init(
         audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
         midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider(),
         uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
-        usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
+        usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider(),
+        usbPowerFaultDetector: USBPowerFaultDetecting = KernelLogUSBPowerFaultDetector()
     ) {
         self.audioStatus = audioStatus
         self.midiStatus = midiStatus
         self.uadConsoleSession = uadConsoleSession
         self.usbPower = usbPower
+        self.usbPowerFaultDetector = usbPowerFaultDetector
     }
 
     /// Every check except external disks, which the menu bar renders as its own expandable
@@ -120,6 +126,16 @@ public final class SystemHealthChecker {
     }
 
     private func usbPowerResult() -> HealthCheckResult {
+        let incidents = usbPowerFaultDetector.recentPowerIncidents(within: Self.usbLogWindow)
+        if !incidents.isEmpty {
+            let preview = incidents.suffix(3).map(\.line).joined(separator: " | ")
+            return HealthCheckResult(
+                label: "Alimentation USB",
+                status: .error("\(incidents.count) évènement(s) suspect(s) dans les 15 dernières minutes"),
+                info: preview
+            )
+        }
+
         switch usbPower.checkPower() {
         case .ok(let details):
             return HealthCheckResult(label: "Alimentation USB", status: .ok, info: details.isEmpty ? nil : details.joined(separator: ", "))

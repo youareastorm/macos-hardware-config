@@ -38,6 +38,7 @@ struct MenuBarView: View {
     private let uadSessionLister: UADSessionListing = FileManagerUADSessionLister()
     private let uadConsole: UADSessionOpening = UADConsoleController()
     private let usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
+    private let usbPowerFaultDetector: USBPowerFaultDetecting = KernelLogUSBPowerFaultDetector()
     private let mountedDiskInspector: MountedDiskInspecting = DiskUtilMountedDiskInspector()
 
     private static let pickerWidth: CGFloat = 150
@@ -166,13 +167,19 @@ struct MenuBarView: View {
             }
         }
 
-        switch usbPower.checkPower() {
-        case .ok(let details):
-            rowOptions["Alimentation USB"] = details
-            selections["Alimentation USB"] = details.first ?? ""
-        case .unavailable:
-            rowOptions["Alimentation USB"] = []
-            selections["Alimentation USB"] = ""
+        let incidents = usbPowerFaultDetector.recentPowerIncidents(within: 15 * 60).map(\.line)
+        if !incidents.isEmpty {
+            rowOptions["Alimentation USB"] = incidents
+            selections["Alimentation USB"] = incidents.first ?? ""
+        } else {
+            switch usbPower.checkPower() {
+            case .ok(let details):
+                rowOptions["Alimentation USB"] = details
+                selections["Alimentation USB"] = details.first ?? ""
+            case .unavailable:
+                rowOptions["Alimentation USB"] = []
+                selections["Alimentation USB"] = ""
+            }
         }
     }
 

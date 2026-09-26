@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import StudioSwitchCore
 
@@ -34,6 +35,11 @@ private final class MockUSBPowerInspector: USBPowerInspecting {
     func checkPower() -> USBPowerCheckOutcome { outcome }
 }
 
+private final class MockUSBPowerFaultDetector: USBPowerFaultDetecting {
+    var incidents: [USBPowerIncident] = []
+    func recentPowerIncidents(within window: TimeInterval) -> [USBPowerIncident] { incidents }
+}
+
 final class SystemHealthCheckerTests: XCTestCase {
     private let profile = Profile(
         name: "Home",
@@ -48,13 +54,15 @@ final class SystemHealthCheckerTests: XCTestCase {
         audioStatus: MockAudioDeviceStatusProvider = MockAudioDeviceStatusProvider(),
         midiStatus: MockMIDIStatusProvider = MockMIDIStatusProvider(),
         uadConsoleSession: MockUADConsoleSessionInspector = MockUADConsoleSessionInspector(),
-        usbPower: MockUSBPowerInspector = MockUSBPowerInspector()
+        usbPower: MockUSBPowerInspector = MockUSBPowerInspector(),
+        usbPowerFaultDetector: MockUSBPowerFaultDetector = MockUSBPowerFaultDetector()
     ) -> SystemHealthChecker {
         SystemHealthChecker(
             audioStatus: audioStatus,
             midiStatus: midiStatus,
             uadConsoleSession: uadConsoleSession,
-            usbPower: usbPower
+            usbPower: usbPower,
+            usbPowerFaultDetector: usbPowerFaultDetector
         )
     }
 
@@ -246,6 +254,33 @@ final class SystemHealthCheckerTests: XCTestCase {
             results.first(where: { $0.label == "Alimentation USB" })?.info,
             "Netac MobileDataStar : 4.48 W (896 mA), USB Storage : 4.48 W (896 mA)"
         )
+    }
+
+    func test_usbPower_errorsWhenKernelLogShowsPowerIncidents() {
+        let usbPowerFaultDetector = MockUSBPowerFaultDetector()
+        usbPowerFaultDetector.incidents = [
+            USBPowerIncident(line: "kernel: (IOUSBHostFamily) AppleUSBHostPort: reset failed, not enough power"),
+            USBPowerIncident(line: "kernel: (IOUSBHostFamily) Netac MobileDataStar detached")
+        ]
+        let checker = makeChecker(usbPowerFaultDetector: usbPowerFaultDetector)
+
+        let results = checker.check(for: profile)
+
+        let result = results.first(where: { $0.label == "Alimentation USB" })
+        XCTAssertEqual(result?.status, .error("2 évènement(s) suspect(s) dans les 15 dernières minutes"))
+        XCTAssertEqual(result?.info, "kernel: (IOUSBHostFamily) AppleUSBHostPort: reset failed, not enough power | kernel: (IOUSBHostFamily) Netac MobileDataStar detached")
+    }
+
+    func test_usbPower_ignoresEnumerationCheckWhenIncidentsFound() {
+        let usbPowerFaultDetector = MockUSBPowerFaultDetector()
+        usbPowerFaultDetector.incidents = [USBPowerIncident(line: "kernel: power fault")]
+        let usbPower = MockUSBPowerInspector()
+        usbPower.outcome = .unavailable
+        let checker = makeChecker(usbPower: usbPower, usbPowerFaultDetector: usbPowerFaultDetector)
+
+        let results = checker.check(for: profile)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .error("1 évènement(s) suspect(s) dans les 15 dernières minutes"))
     }
 
     func test_usbPower_warnsWhenCheckUnavailable() {
