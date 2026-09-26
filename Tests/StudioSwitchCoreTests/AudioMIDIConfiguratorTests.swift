@@ -40,6 +40,39 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         ])
     }
 
+    func test_setDefaultInputDevice_setsOnlyInput() throws {
+        let deviceProvider = MockAudioDeviceProvider()
+        deviceProvider.idsByName["Apollo Solo"] = 42
+        let configurator = AudioMIDIConfigurator(deviceProvider: deviceProvider, midiProvider: MockMIDIDeviceProvider(present: false))
+
+        try configurator.setDefaultInputDevice(named: "Apollo Solo")
+
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.0), [42])
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.1), [kAudioHardwarePropertyDefaultInputDevice])
+    }
+
+    func test_setDefaultOutputDevice_setsOutputAndSystemOutput() throws {
+        let deviceProvider = MockAudioDeviceProvider()
+        deviceProvider.idsByName["Virtuel 1 + Virtuel 2"] = 7
+        let configurator = AudioMIDIConfigurator(deviceProvider: deviceProvider, midiProvider: MockMIDIDeviceProvider(present: false))
+
+        try configurator.setDefaultOutputDevice(named: "Virtuel 1 + Virtuel 2")
+
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.0), [7, 7])
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.1), [
+            kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioHardwarePropertyDefaultSystemOutputDevice
+        ])
+    }
+
+    func test_setDefaultInputDevice_throwsWhenDeviceNotFound() {
+        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: MockMIDIDeviceProvider(present: false))
+
+        XCTAssertThrowsError(try configurator.setDefaultInputDevice(named: "Missing")) { error in
+            XCTAssertEqual(error as? AudioMIDIConfiguratorError, .deviceNotFound("Missing"))
+        }
+    }
+
     func test_setDefaultDevice_throwsWhenDeviceNotFound() {
         let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: MockMIDIDeviceProvider(present: false))
 

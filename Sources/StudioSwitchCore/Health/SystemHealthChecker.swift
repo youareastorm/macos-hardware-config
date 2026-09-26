@@ -1,24 +1,34 @@
+import Foundation
+
 public final class SystemHealthChecker {
     private let audioStatus: AudioDeviceStatusProviding
     private let midiStatus: MIDIStatusProviding
     private let storageProvider: ExternalStorageProviding
+    private let uadConsoleSession: UADConsoleSessionInspecting
+    private let usbPower: USBPowerInspecting
 
     public init(
         audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
         midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider(),
-        storageProvider: ExternalStorageProviding = FileManagerExternalStorageProvider()
+        storageProvider: ExternalStorageProviding = FileManagerExternalStorageProvider(),
+        uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
+        usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
     ) {
         self.audioStatus = audioStatus
         self.midiStatus = midiStatus
         self.storageProvider = storageProvider
+        self.uadConsoleSession = uadConsoleSession
+        self.usbPower = usbPower
     }
 
     public func check(for profile: Profile) -> [HealthCheckResult] {
         [
             audioInterfaceResult(for: profile),
-            speakersResult(),
+            outputRoutingResult(for: profile),
             midiResult(),
-            externalDisksResult(for: profile)
+            uadConsoleResult(for: profile),
+            externalDisksResult(for: profile),
+            usbPowerResult()
         ]
     }
 
@@ -33,20 +43,38 @@ public final class SystemHealthChecker {
             return HealthCheckResult(label: "Interface audio", status: .warning("\(Int(actualRate)) Hz au lieu de \(Int(expectedRate)) Hz"))
         }
 
-        let isDefaultOutput = audioStatus.defaultOutputDeviceName()?.caseInsensitiveCompare(profile.audioDeviceName) == .orderedSame
         let isDefaultInput = audioStatus.defaultInputDeviceName()?.caseInsensitiveCompare(profile.audioDeviceName) == .orderedSame
-        guard isDefaultOutput, isDefaultInput else {
-            return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas le device par défaut"))
+        guard isDefaultInput else {
+            return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas l'entrée par défaut"))
+        }
+
+        if profile.outputDeviceTargetName == nil {
+            let isDefaultOutput = audioStatus.defaultOutputDeviceName()?.caseInsensitiveCompare(profile.audioDeviceName) == .orderedSame
+            guard isDefaultOutput else {
+                return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas la sortie par défaut"))
+            }
         }
 
         return HealthCheckResult(label: "Interface audio", status: .ok)
     }
 
-    private func speakersResult() -> HealthCheckResult {
-        guard audioStatus.builtInOutputDeviceName() != nil else {
-            return HealthCheckResult(label: "Haut-parleurs Mac", status: .error("Non détectés"))
+    private func outputRoutingResult(for profile: Profile) -> HealthCheckResult {
+        guard let target = profile.outputDeviceTargetName else {
+            guard audioStatus.builtInOutputDeviceName() != nil else {
+                return HealthCheckResult(label: "Sorties audio", status: .error("Haut-parleurs Mac non détectés"))
+            }
+            return HealthCheckResult(label: "Sorties audio", status: .ok)
         }
-        return HealthCheckResult(label: "Haut-parleurs Mac", status: .ok)
+
+        guard let currentOutput = audioStatus.defaultOutputDeviceName() else {
+            return HealthCheckResult(label: "Sorties audio", status: .error("Aucune sortie par défaut détectée"))
+        }
+
+        guard currentOutput.caseInsensitiveCompare(target) == .orderedSame else {
+            return HealthCheckResult(label: "Sorties audio", status: .error("Sortie actuelle : \(currentOutput)"))
+        }
+
+        return HealthCheckResult(label: "Sorties audio", status: .ok)
     }
 
     private func midiResult() -> HealthCheckResult {
@@ -54,6 +82,23 @@ public final class SystemHealthChecker {
             return HealthCheckResult(label: "MIDI", status: .warning("Aucun périphérique en ligne"))
         }
         return HealthCheckResult(label: "MIDI", status: .ok)
+    }
+
+    private func uadConsoleResult(for profile: Profile) -> HealthCheckResult {
+        guard let currentSession = uadConsoleSession.currentSessionName() else {
+            return HealthCheckResult(label: "UAD Console", status: .error("UAD Console non lancé ou aucune session ouverte"))
+        }
+
+        let expectedName = expectedSessionName(fromPath: profile.uadConsoleSession)
+        guard currentSession.localizedCaseInsensitiveContains(expectedName) else {
+            return HealthCheckResult(label: "UAD Console", status: .error("Session ouverte : \(currentSession)"))
+        }
+
+        return HealthCheckResult(label: "UAD Console", status: .ok)
+    }
+
+    private func expectedSessionName(fromPath path: String) -> String {
+        (path as NSString).lastPathComponent.replacingOccurrences(of: ".uadmix", with: "")
     }
 
     private func externalDisksResult(for profile: Profile) -> HealthCheckResult {
@@ -68,5 +113,13 @@ public final class SystemHealthChecker {
         }
 
         return HealthCheckResult(label: "Disques externes", status: .ok)
+    }
+
+    private func usbPowerResult() -> HealthCheckResult {
+        let underpowered = usbPower.underpoweredDeviceNames()
+        guard underpowered.isEmpty else {
+            return HealthCheckResult(label: "Alimentation USB", status: .error("Sous-alimentés : \(underpowered.joined(separator: ", "))"))
+        }
+        return HealthCheckResult(label: "Alimentation USB", status: .ok)
     }
 }

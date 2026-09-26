@@ -2,6 +2,8 @@ import CoreAudio
 
 public protocol AudioMIDIConfiguring {
     func setDefaultDevice(named deviceName: String) throws
+    func setDefaultInputDevice(named deviceName: String) throws
+    func setDefaultOutputDevice(named deviceName: String) throws
     func enableIACDriverIfPresent() throws
 }
 
@@ -19,15 +21,31 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
     }
 
     public func setDefaultDevice(named deviceName: String) throws {
-        guard let deviceID = deviceProvider.deviceID(named: deviceName) else {
-            throw AudioMIDIConfiguratorError.deviceNotFound(deviceName)
-        }
+        let deviceID = try resolvedDeviceID(named: deviceName)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultInputDevice)
+        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultOutputDevice)
+        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+    }
+
+    public func setDefaultInputDevice(named deviceName: String) throws {
+        let deviceID = try resolvedDeviceID(named: deviceName)
+        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultInputDevice)
+    }
+
+    public func setDefaultOutputDevice(named deviceName: String) throws {
+        let deviceID = try resolvedDeviceID(named: deviceName)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultOutputDevice)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
     }
 
     public func enableIACDriverIfPresent() throws {
         try midiProvider.enableIACDriver()
+    }
+
+    private func resolvedDeviceID(named deviceName: String) throws -> AudioDeviceID {
+        guard let deviceID = deviceProvider.deviceID(named: deviceName) else {
+            throw AudioMIDIConfiguratorError.deviceNotFound(deviceName)
+        }
+        return deviceID
     }
 }

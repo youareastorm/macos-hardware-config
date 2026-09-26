@@ -165,10 +165,13 @@ struct MenuBarView: View {
             if let error = result.deviceConfigError {
                 Text("Erreur audio : \(error)").foregroundStyle(.orange)
             }
+            if let error = result.outputRoutingError {
+                Text("Erreur sortie audio : \(error)").foregroundStyle(.orange)
+            }
             if let error = result.uadConsoleError {
                 Text("Erreur UAD Console : \(error)").foregroundStyle(.orange)
             }
-            if result.deviceConfigError == nil && result.uadConsoleError == nil {
+            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.uadConsoleError == nil {
                 Text("\(result.profile.name) activé").foregroundStyle(.green)
             }
         }

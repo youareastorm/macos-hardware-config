@@ -61,6 +61,20 @@ public struct Profile: Codable, Equatable {
     }
 }
 
+extension Profile {
+    /// The single device StudioSwitch should set as default output for this profile: the lone
+    /// entry when there's one, or the name of the combined Multi-Output Device it creates/reuses
+    /// when there are several. Nil when the profile doesn't route output separately from its
+    /// interface (audioDeviceName then serves as both input and output).
+    public var outputDeviceTargetName: String? {
+        switch expectedOutputDeviceNames.count {
+        case 0: return nil
+        case 1: return expectedOutputDeviceNames[0]
+        default: return expectedOutputDeviceNames.joined(separator: " + ")
+        }
+    }
+}
+
 public struct ProfilesFile: Codable, Equatable {
     public let profiles: [Profile]
 

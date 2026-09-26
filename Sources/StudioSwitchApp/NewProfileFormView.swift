@@ -27,6 +27,7 @@ struct NewProfileFormView: View {
     @State private var detectedModels: [String] = []
     @State private var expectedSampleRate = ""
     @State private var expectedExternalDiskNames = ""
+    @State private var expectedOutputDeviceNames = ""
 
     init(hardwareModelProvider: HardwareModelProviding = ThunderboltHardwareModelProvider(), onCancel: @escaping () -> Void, onSave: @escaping (Profile) -> Void) {
         self.hardwareModelProvider = hardwareModelProvider
@@ -58,6 +59,7 @@ struct NewProfileFormView: View {
             Toggle("Activer IAC Driver", isOn: $useIACDriver)
             TextField("Fréquence attendue en Hz (optionnel)", text: $expectedSampleRate)
             TextField("Disques externes attendus (séparés par des virgules)", text: $expectedExternalDiskNames)
+            TextField("Sorties audio attendues (séparées par des virgules, ex. Virtuel 1, Virtuel 2)", text: $expectedOutputDeviceNames)
 
             Text("DAWs").font(.subheadline)
             ForEach(Self.knownDAWs, id: \.name) { daw in
@@ -85,10 +87,6 @@ struct NewProfileFormView: View {
 
     private func save() {
         let daws = Self.knownDAWs.filter { selectedDAWNames.contains($0.name) }
-        let diskNames = expectedExternalDiskNames
-            .split(separator: ",")
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
         onSave(Profile(
             name: name,
             deviceNameMatch: deviceNameMatch,
@@ -97,7 +95,15 @@ struct NewProfileFormView: View {
             useIACDriver: useIACDriver,
             daws: daws,
             expectedSampleRate: Double(expectedSampleRate),
-            expectedExternalDiskNames: diskNames
+            expectedExternalDiskNames: Self.parseCommaList(expectedExternalDiskNames),
+            expectedOutputDeviceNames: Self.parseCommaList(expectedOutputDeviceNames)
         ))
+    }
+
+    private static func parseCommaList(_ text: String) -> [String] {
+        text
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 }
