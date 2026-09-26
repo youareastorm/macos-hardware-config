@@ -10,6 +10,7 @@ struct MenuBarView: View {
     @State private var dawLaunchMessage: String?
     @State private var showingNewProfileForm = false
     @State private var saveError: String?
+    @State private var healthResults: [HealthCheckResult] = []
 
     private let profileStore = ProfileStore()
     private let activationController = ProfileActivationController(
@@ -18,6 +19,7 @@ struct MenuBarView: View {
         uadConsole: UADConsoleController()
     )
     private let dawLauncher = DAWLauncher()
+    private let healthChecker = SystemHealthChecker()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -30,12 +32,18 @@ struct MenuBarView: View {
                     dawLaunchMessage = nil
                     lastResult = activationController.activate(profile)
                     activeProfile = lastResult?.deviceDetected == true ? profile : nil
+                    healthResults = healthChecker.check(for: profile)
                 }
             }
 
             if let result = lastResult {
                 Divider()
                 statusText(for: result)
+            }
+
+            if !healthResults.isEmpty {
+                Divider()
+                healthIndicators
             }
 
             if let activeProfile {
@@ -107,6 +115,45 @@ struct MenuBarView: View {
             }
         } catch {
             dawLaunchMessage = "Échec du lancement de \(daw.name) : \(error)"
+        }
+    }
+
+    private var healthIndicators: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(healthResults) { result in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(color(for: result.status))
+                        .frame(width: 8, height: 8)
+                    Text(result.label)
+                    if let detail = detail(for: result.status) {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if let activeProfile {
+                Button("Actualiser") {
+                    healthResults = healthChecker.check(for: activeProfile)
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func color(for status: HealthStatus) -> Color {
+        switch status {
+        case .ok: return .green
+        case .warning: return .yellow
+        case .error: return .red
+        }
+    }
+
+    private func detail(for status: HealthStatus) -> String? {
+        switch status {
+        case .ok: return nil
+        case .warning(let message), .error(let message): return message
         }
     }
 

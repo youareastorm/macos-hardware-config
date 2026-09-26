@@ -43,3 +43,19 @@ system_profiler SPAudioDataType | grep -B2 -A2 Apollo
 ```
 
 and copy the exact device name into `deviceNameMatch` — matching is exact (case-insensitive), not a substring match, so this must be precise.
+
+Two optional fields let a profile drive the health indicators (see below):
+
+- `expectedSampleRate`: nominal sample rate in Hz the audio interface should be running at (e.g. `96000`). Omit or leave `null` to skip this check.
+- `expectedExternalDiskNames`: volume names of external disks that should be mounted for this profile (e.g. `["Samples", "Backup"]`). Omit or leave `[]` to skip this check.
+
+### Health indicators
+
+Clicking a profile in the menu bar runs a set of status checks and shows a colored dot per item: green (OK), yellow (warning), red (error).
+
+- **Interface audio** — is the configured audio device online, at the expected sample rate, and set as the default input/output.
+- **Haut-parleurs Mac** — is the Mac's built-in output device visible to CoreAudio.
+- **MIDI** — is at least one MIDI device (e.g. the IAC Driver) online.
+- **Disques externes** — are the disks listed in `expectedExternalDiskNames` mounted.
+
+Use the "Actualiser" button under the indicators to re-run the checks without reactivating the profile.
