@@ -1,3 +1,5 @@
+import Foundation
+
 public struct USBPowerIncident: Equatable {
     public let line: String
 
