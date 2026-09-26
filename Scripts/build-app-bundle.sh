@@ -28,6 +28,8 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
     <string>1.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>StudioSwitch lit le titre de la fenêtre de UAD Console pour savoir quelle session est ouverte.</string>
 </dict>
 </plist>
 PLIST
