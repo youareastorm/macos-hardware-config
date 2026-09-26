@@ -31,8 +31,8 @@ private final class MockUADConsoleSessionInspector: UADConsoleSessionInspecting 
 }
 
 private final class MockUSBPowerInspector: USBPowerInspecting {
-    var names: [String] = []
-    func underpoweredDeviceNames() -> [String] { names }
+    var outcome: USBPowerCheckOutcome = .ok
+    func checkPower() -> USBPowerCheckOutcome { outcome }
 }
 
 final class SystemHealthCheckerTests: XCTestCase {
@@ -276,11 +276,21 @@ final class SystemHealthCheckerTests: XCTestCase {
 
     func test_usbPower_errorsWhenDeviceUnderpowered() {
         let usbPower = MockUSBPowerInspector()
-        usbPower.names = ["OWC Thunderbolt Hub"]
+        usbPower.outcome = .underpowered(["OWC Thunderbolt Hub"])
         let checker = makeChecker(usbPower: usbPower)
 
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .error("Sous-alimentés : OWC Thunderbolt Hub"))
+    }
+
+    func test_usbPower_warnsWhenCheckUnavailable() {
+        let usbPower = MockUSBPowerInspector()
+        usbPower.outcome = .unavailable
+        let checker = makeChecker(usbPower: usbPower)
+
+        let results = checker.check(for: profile)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
     }
 }

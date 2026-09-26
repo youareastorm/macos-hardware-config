@@ -116,10 +116,13 @@ public final class SystemHealthChecker {
     }
 
     private func usbPowerResult() -> HealthCheckResult {
-        let underpowered = usbPower.underpoweredDeviceNames()
-        guard underpowered.isEmpty else {
-            return HealthCheckResult(label: "Alimentation USB", status: .error("Sous-alimentés : \(underpowered.joined(separator: ", "))"))
+        switch usbPower.checkPower() {
+        case .ok:
+            return HealthCheckResult(label: "Alimentation USB", status: .ok)
+        case .underpowered(let names):
+            return HealthCheckResult(label: "Alimentation USB", status: .error("Sous-alimentés : \(names.joined(separator: ", "))"))
+        case .unavailable:
+            return HealthCheckResult(label: "Alimentation USB", status: .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
         }
-        return HealthCheckResult(label: "Alimentation USB", status: .ok)
     }
 }

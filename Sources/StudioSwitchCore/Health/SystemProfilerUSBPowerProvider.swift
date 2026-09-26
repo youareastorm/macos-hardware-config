@@ -5,20 +5,30 @@ import Foundation
 /// used instead of the human-readable text output because `system_profiler`'s text labels are
 /// localized to the system's language — hardcoding an English label like "Current Available
 /// (mA)" would silently stop matching on a non-English Mac.
+///
+/// `system_profiler -json SPUSBDataType` has been observed to return a top-level empty array
+/// (`{"SPUSBDataType": []}`, no error, exit code 0) on a real, fully-populated USB topology —
+/// confirmed on an Apple Silicon Mac running macOS Tahoe, both with and without JSON output, in
+/// both a sandboxed and a plain interactive shell. `ioreg -p IOUSB` sees the same devices fine,
+/// so this isn't a permissions issue; it's `system_profiler` itself failing to enumerate. An empty
+/// result therefore is NOT treated as "nothing underpowered" — that would silently hide a real
+/// problem — it's reported as `.unavailable` so the health check can say "couldn't verify"
+/// instead of a false "OK".
 public final class SystemProfilerUSBPowerProvider: USBPowerInspecting {
     public init() {}
 
-    public func underpoweredDeviceNames() -> [String] {
+    public func checkPower() -> USBPowerCheckOutcome {
         guard let root = runSystemProfilerJSON(),
-              let buses = root["SPUSBDataType"] as? [[String: Any]] else {
-            return []
+              let buses = root["SPUSBDataType"] as? [[String: Any]],
+              !buses.isEmpty else {
+            return .unavailable
         }
 
         var results: [String] = []
         for bus in buses {
             collectUnderpowered(from: bus, into: &results)
         }
-        return results
+        return results.isEmpty ? .ok : .underpowered(results)
     }
 
     private func runSystemProfilerJSON() -> [String: Any]? {
