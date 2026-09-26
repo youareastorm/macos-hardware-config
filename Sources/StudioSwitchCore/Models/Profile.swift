@@ -23,6 +23,7 @@ public struct Profile: Codable, Equatable {
     public let daws: [DAWEntry]
     public let expectedSampleRate: Double?
     public let expectedExternalDiskNames: [String]
+    public let expectedOutputDeviceNames: [String]
 
     public init(
         name: String,
@@ -32,7 +33,8 @@ public struct Profile: Codable, Equatable {
         useIACDriver: Bool,
         daws: [DAWEntry],
         expectedSampleRate: Double? = nil,
-        expectedExternalDiskNames: [String] = []
+        expectedExternalDiskNames: [String] = [],
+        expectedOutputDeviceNames: [String] = []
     ) {
         self.name = name
         self.deviceNameMatch = deviceNameMatch
@@ -42,6 +44,7 @@ public struct Profile: Codable, Equatable {
         self.daws = daws
         self.expectedSampleRate = expectedSampleRate
         self.expectedExternalDiskNames = expectedExternalDiskNames
+        self.expectedOutputDeviceNames = expectedOutputDeviceNames
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,6 +57,7 @@ public struct Profile: Codable, Equatable {
         daws = try container.decode([DAWEntry].self, forKey: .daws)
         expectedSampleRate = try container.decodeIfPresent(Double.self, forKey: .expectedSampleRate)
         expectedExternalDiskNames = try container.decodeIfPresent([String].self, forKey: .expectedExternalDiskNames) ?? []
+        expectedOutputDeviceNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputDeviceNames) ?? []
     }
 }
 
