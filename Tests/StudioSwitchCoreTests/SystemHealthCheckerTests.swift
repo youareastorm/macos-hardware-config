@@ -268,22 +268,12 @@ final class SystemHealthCheckerTests: XCTestCase {
         XCTAssertEqual(results.first(where: { $0.label == "Disques externes" })?.status, .ok)
     }
 
-    func test_usbPower_okWhenNothingUnderpowered() {
+    func test_usbPower_okWhenEnumerationWorks() {
         let checker = makeChecker()
 
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .ok)
-    }
-
-    func test_usbPower_errorsWhenDeviceUnderpowered() {
-        let usbPower = MockUSBPowerInspector()
-        usbPower.outcome = .underpowered(["OWC Thunderbolt Hub"])
-        let checker = makeChecker(usbPower: usbPower)
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .error("Sous-alimentés : OWC Thunderbolt Hub"))
     }
 
     func test_usbPower_warnsWhenCheckUnavailable() {

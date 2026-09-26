@@ -139,8 +139,6 @@ public final class SystemHealthChecker {
         switch usbPower.checkPower() {
         case .ok:
             return HealthCheckResult(label: "Alimentation USB", status: .ok)
-        case .underpowered(let names):
-            return HealthCheckResult(label: "Alimentation USB", status: .error("Sous-alimentés : \(names.joined(separator: ", "))"))
         case .unavailable:
             return HealthCheckResult(label: "Alimentation USB", status: .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
         }
