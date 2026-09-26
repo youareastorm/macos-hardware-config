@@ -37,6 +37,10 @@ private final class MockConfigurator: AudioMIDIConfiguring {
         enableIACDriverCallCount += 1
         if let error = enableIACDriverError { throw error }
     }
+
+    func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {}
+
+    func enableMIDIDevice(named deviceName: String) throws {}
 }
 
 private final class MockUADConsole: UADSessionOpening {

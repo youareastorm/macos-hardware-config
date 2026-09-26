@@ -28,6 +28,7 @@ struct NewProfileFormView: View {
     @State private var expectedSampleRate = ""
     @State private var expectedExternalDiskNames = ""
     @State private var expectedOutputDeviceNames = ""
+    @State private var expectedOutputChannelNames = ""
 
     init(hardwareModelProvider: HardwareModelProviding = ThunderboltHardwareModelProvider(), onCancel: @escaping () -> Void, onSave: @escaping (Profile) -> Void) {
         self.hardwareModelProvider = hardwareModelProvider
@@ -60,6 +61,7 @@ struct NewProfileFormView: View {
             TextField("Fréquence attendue en Hz (optionnel)", text: $expectedSampleRate)
             TextField("Disques externes attendus (séparés par des virgules)", text: $expectedExternalDiskNames)
             TextField("Sorties audio attendues (séparées par des virgules, ex. Virtuel 1, Virtuel 2)", text: $expectedOutputDeviceNames)
+            TextField("Canaux de sortie attendus (2, séparés par une virgule, ex. VIRTUAL 1, VIRTUAL 2)", text: $expectedOutputChannelNames)
 
             Text("DAWs").font(.subheadline)
             ForEach(Self.knownDAWs, id: \.name) { daw in
@@ -96,7 +98,8 @@ struct NewProfileFormView: View {
             daws: daws,
             expectedSampleRate: Double(expectedSampleRate),
             expectedExternalDiskNames: Self.parseCommaList(expectedExternalDiskNames),
-            expectedOutputDeviceNames: Self.parseCommaList(expectedOutputDeviceNames)
+            expectedOutputDeviceNames: Self.parseCommaList(expectedOutputDeviceNames),
+            expectedOutputChannelNames: Self.parseCommaList(expectedOutputChannelNames)
         ))
     }
 

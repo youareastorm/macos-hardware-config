@@ -1,3 +1,4 @@
+import AudioToolbox
 import CoreAudio
 
 public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
@@ -60,6 +61,40 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
         guard status == noErr else { return nil }
 
         return channels.map { channelName(forDeviceID: deviceID, channel: $0) ?? "Canal \($0)" }
+    }
+
+    public func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] {
+        guard let deviceID = deviceProvider.deviceID(named: deviceName) else { return [] }
+        let channelCount = outputChannelCount(for: deviceID)
+        guard channelCount >= 2 else { return [] }
+
+        var pairs: [ChannelPair] = []
+        var channel: UInt32 = 1
+        while channel + 1 <= channelCount {
+            let firstName = channelName(forDeviceID: deviceID, channel: channel) ?? "Canal \(channel)"
+            let secondName = channelName(forDeviceID: deviceID, channel: channel + 1) ?? "Canal \(channel + 1)"
+            pairs.append(ChannelPair(firstChannel: channel, secondChannel: channel + 1, firstName: firstName, secondName: secondName))
+            channel += 2
+        }
+        return pairs
+    }
+
+    private func outputChannelCount(for deviceID: AudioDeviceID) -> UInt32 {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == noErr, dataSize > 0 else { return 0 }
+
+        let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: Int(dataSize))
+        defer { bufferListPointer.deallocate() }
+
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, bufferListPointer) == noErr else { return 0 }
+
+        let bufferList = UnsafeMutableAudioBufferListPointer(bufferListPointer)
+        return bufferList.reduce(into: UInt32(0)) { total, buffer in total += buffer.mNumberChannels }
     }
 
     private func channelName(forDeviceID deviceID: AudioDeviceID, channel: UInt32) -> String? {

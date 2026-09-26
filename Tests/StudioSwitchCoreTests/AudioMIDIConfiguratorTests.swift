@@ -15,12 +15,18 @@ private final class MockAudioDeviceProvider: AudioDeviceProviding {
 private final class MockMIDIDeviceProvider: MIDIDeviceProviding {
     var present: Bool
     var enableError: Error?
+    var enableDeviceError: Error?
     private(set) var enableCallCount = 0
+    private(set) var enabledDeviceNames: [String] = []
     init(present: Bool) { self.present = present }
     func iacDriverIsPresent() -> Bool { present }
     func enableIACDriver() throws {
         enableCallCount += 1
         if let enableError { throw enableError }
+    }
+    func enableDevice(named deviceName: String) throws {
+        enabledDeviceNames.append(deviceName)
+        if let enableDeviceError { throw enableDeviceError }
     }
 }
 
@@ -97,6 +103,34 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
 
         XCTAssertThrowsError(try configurator.enableIACDriverIfPresent()) { error in
             XCTAssertEqual(error as? CoreMIDIError, .iacDriverNotFound)
+        }
+    }
+
+    func test_enableMIDIDevice_enablesNamedDevice() throws {
+        let midiProvider = MockMIDIDeviceProvider(present: false)
+        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
+
+        try configurator.enableMIDIDevice(named: "Oxygen 49")
+
+        XCTAssertEqual(midiProvider.enabledDeviceNames, ["Oxygen 49"])
+    }
+
+    func test_enableMIDIDevice_throwsWhenDeviceNotFound() {
+        let midiProvider = MockMIDIDeviceProvider(present: false)
+        midiProvider.enableDeviceError = CoreMIDIError.deviceNotFound("Missing")
+        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
+
+        XCTAssertThrowsError(try configurator.enableMIDIDevice(named: "Missing")) { error in
+            XCTAssertEqual(error as? CoreMIDIError, .deviceNotFound("Missing"))
+        }
+    }
+
+    func test_setPreferredOutputChannelPair_throwsWhenDeviceNotFound() {
+        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: MockMIDIDeviceProvider(present: false))
+        let pair = ChannelPair(firstChannel: 1, secondChannel: 2, firstName: "Virtual 1", secondName: "Virtual 2")
+
+        XCTAssertThrowsError(try configurator.setPreferredOutputChannelPair(pair, forDeviceNamed: "Missing")) { error in
+            XCTAssertEqual(error as? AudioMIDIConfiguratorError, .deviceNotFound("Missing"))
         }
     }
 }

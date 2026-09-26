@@ -8,6 +8,7 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     var defaultInput: String?
     var builtInOutput: String?
     var outputChannels: [String: [String]] = [:]
+    var availableChannelPairs: [String: [ChannelPair]] = [:]
 
     func isDeviceOnline(named deviceName: String) -> Bool { onlineDeviceNames.contains(deviceName) }
     func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? { sampleRates[deviceName] }
@@ -15,16 +16,12 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     func defaultInputDeviceName() -> String? { defaultInput }
     func builtInOutputDeviceName() -> String? { builtInOutput }
     func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { outputChannels[deviceName] }
+    func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { availableChannelPairs[deviceName] ?? [] }
 }
 
 private final class MockMIDIStatusProvider: MIDIStatusProviding {
     var names: [String] = []
     func onlineDeviceNames() -> [String] { names }
-}
-
-private final class MockExternalStorageProvider: ExternalStorageProviding {
-    var names: [String] = []
-    func mountedExternalVolumeNames() -> [String] { names }
 }
 
 private final class MockUADConsoleSessionInspector: UADConsoleSessionInspecting {
@@ -50,14 +47,12 @@ final class SystemHealthCheckerTests: XCTestCase {
     private func makeChecker(
         audioStatus: MockAudioDeviceStatusProvider = MockAudioDeviceStatusProvider(),
         midiStatus: MockMIDIStatusProvider = MockMIDIStatusProvider(),
-        storageProvider: MockExternalStorageProvider = MockExternalStorageProvider(),
         uadConsoleSession: MockUADConsoleSessionInspector = MockUADConsoleSessionInspector(),
         usbPower: MockUSBPowerInspector = MockUSBPowerInspector()
     ) -> SystemHealthChecker {
         SystemHealthChecker(
             audioStatus: audioStatus,
             midiStatus: midiStatus,
-            storageProvider: storageProvider,
             uadConsoleSession: uadConsoleSession,
             usbPower: usbPower
         )
@@ -230,42 +225,6 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "UAD Console" })?.status, .ok)
-    }
-
-    func test_externalDisks_okWhenProfileExpectsNone() {
-        let checker = makeChecker()
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Disques externes" })?.status, .ok)
-    }
-
-    func test_externalDisks_errorsWhenExpectedDiskMissing() {
-        let storageProvider = MockExternalStorageProvider()
-        storageProvider.names = ["Backup"]
-        let profileWithDisks = Profile(
-            name: "Studio", deviceNameMatch: "Apollo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedExternalDiskNames: ["Backup", "Samples"]
-        )
-        let checker = makeChecker(storageProvider: storageProvider)
-
-        let results = checker.check(for: profileWithDisks)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Disques externes" })?.status, .error("Manquants : Samples"))
-    }
-
-    func test_externalDisks_okWhenAllExpectedDisksMounted() {
-        let storageProvider = MockExternalStorageProvider()
-        storageProvider.names = ["Backup", "Samples"]
-        let profileWithDisks = Profile(
-            name: "Studio", deviceNameMatch: "Apollo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedExternalDiskNames: ["Backup", "Samples"]
-        )
-        let checker = makeChecker(storageProvider: storageProvider)
-
-        let results = checker.check(for: profileWithDisks)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Disques externes" })?.status, .ok)
     }
 
     func test_usbPower_okWhenEnumerationWorks() {

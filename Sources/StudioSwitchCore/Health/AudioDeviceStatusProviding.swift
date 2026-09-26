@@ -10,4 +10,9 @@ public protocol AudioDeviceStatusProviding {
     /// software-return channels via Audio MIDI Setup's "Configurer la disposition" dialog. `nil`
     /// when the device is offline or has no stereo pair configured.
     func outputChannelNames(forDeviceNamed deviceName: String) -> [String]?
+
+    /// All consecutive stereo channel pairs available on the device's output scope (e.g. 1/2, 3/4,
+    /// 5/6), for presenting as choices — not just the one currently active. Empty when the device
+    /// is offline or reports no output channels.
+    func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair]
 }

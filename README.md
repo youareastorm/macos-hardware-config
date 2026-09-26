@@ -47,8 +47,9 @@ and copy the exact device name into `deviceNameMatch` — matching is exact (cas
 Optional fields let a profile drive automatic setup and the health indicators (see below):
 
 - `expectedSampleRate`: nominal sample rate in Hz the audio interface should be running at (e.g. `96000`). Omit or leave `null` to skip this check.
-- `expectedExternalDiskNames`: volume names of external disks that should be mounted for this profile (e.g. `["Samples", "Backup"]`). Omit or leave `[]` to skip this check.
+- `expectedExternalDiskNames`: volume names of external disks expected for this profile (e.g. `["Samples", "Backup"]`). Drives the "Disques externes" disclosure (see below), not a colored indicator. Omit or leave `[]` to hide it.
 - `expectedOutputDeviceNames`: the device(s) the Mac's audio *output* should route to, separately from `audioDeviceName` (which is only the input/recording interface once this is set). One entry selects that device as the default output; two or more (e.g. `["Virtuel 1", "Virtuel 2"]`) make StudioSwitch create and select a combined Multi-Output Device the first time the profile is activated, and reuse it afterwards. Omit or leave `[]` to keep `audioDeviceName` as both input and output.
+- `expectedOutputChannelNames`: exactly two channel names `audioDeviceName` should have as its active output pair (e.g. `["VIRTUAL 1", "VIRTUAL 2"]`), for interfaces with more outputs than one stereo pair (a UA Apollo routed to its software-return channels instead of its main outs). Distinct from `expectedOutputDeviceNames`, which combines separate CoreAudio devices — this checks a pair *within* one device. Omit or leave `[]` to skip this check.
 
 ### Automatic setup on activation
 
@@ -63,19 +64,20 @@ Any step that fails is reported next to the profile buttons without blocking the
 
 ### Health indicators
 
-Clicking a profile in the menu bar runs a set of status checks and shows a colored dot per item: green (OK), yellow (warning), red (error). "Actualiser" re-runs them without reactivating the profile.
+Clicking a profile (or just opening the app, for whichever profile matches the currently connected hardware) shows one row per check: a colored dot (green/yellow/red), the check's name, and — on the same line, right-aligned — a dropdown of the real alternatives currently detected. Picking one applies it immediately (sets the device, opens the session, writes the channel pair, …) and re-runs every check. "Actualiser" re-runs them without reactivating the profile.
 
-- **Interface audio** — is `audioDeviceName` online, at the expected sample rate, and set as the default input (and output, when the profile has no separate `expectedOutputDeviceNames`).
-- **Sorties audio** — without `expectedOutputDeviceNames`: is the Mac's built-in output visible to CoreAudio (a basic hardware sanity check). With it: is the current default output exactly that device (or the combined Multi-Output Device when there are several).
-- **MIDI** — is at least one MIDI device (e.g. the IAC Driver) online.
-- **UAD Console** — is UAD Console running with the session named after `uadConsoleSession`'s filename open; shows the session that's actually open when it doesn't match. Requires granting this app Automation access to control "System Events" the first time (macOS will prompt) — without it, this indicator stays red.
-- **Disques externes** — are the disks listed in `expectedExternalDiskNames` mounted.
-- **Alimentation USB** — any connected USB device (hub or drive) currently drawing more current than its port supplies, the classic sign of a hub that isn't plugged into the wall. This one is the least field-tested part of the app (see note below).
+- **Interface audio** — is `audioDeviceName` online, at the expected sample rate, and set as the default input (and output, when the profile has no separate `expectedOutputDeviceNames`). Dropdown: every connected CoreAudio device; picking one sets it as the default input (and output too, unless the profile routes output separately).
+- **Sorties audio** — without `expectedOutputDeviceNames`: is the Mac's built-in output visible to CoreAudio (a basic hardware sanity check). With it: is the current default output exactly that device (or the combined Multi-Output Device when there are several). Dropdown: every connected device; picking one sets it as the default output.
+- **MIDI** — is at least one MIDI device (e.g. the IAC Driver) online. Dropdown: the online devices, plus "IAC Driver" when it isn't already one of them; picking an entry brings that device online (`kMIDIPropertyOffline` → 0).
+- **UAD Console** — is UAD Console running with the session named after `uadConsoleSession`'s filename open; shows the session that's actually open when it doesn't match. Requires granting this app Automation access to control "System Events" the first time (macOS will prompt) — without it, this indicator stays red. Dropdown: every `.uadmix` file in `~/Documents/Universal Audio/Sessions`, currently-open one first; picking one opens it in UAD Console.
+- **Canaux de sortie** — only shown when `expectedOutputChannelNames` is set: is that channel pair currently active on `audioDeviceName`. Dropdown: every consecutive channel pair the device reports (1/2, 3/4, …); picking one writes it as the device's preferred stereo pair.
+- **Alimentation USB** — whether `system_profiler` can currently enumerate USB devices at all, with each bus-powered device's reported wattage as detail text. No per-device "underpowered" detection: empirically, unplugging a hub's wall adapter here produced no observable change in anything macOS exposes (see the class's doc comment). Its dropdown is informational only — picking an entry doesn't do anything, since there's nothing to apply.
+
+Below the checks, a separate "Disques externes" row (no colored dot) expands on click to show only the disks from `expectedExternalDiskNames` that are actually mounted right now, each with its USB device's wattage when macOS reports it (or "non remonté par macOS"). Disks that are expected but absent are simply left off the list. The disk ↔ USB-device correlation (substring match, since `diskutil` and `system_profiler` truncate device names differently) is the same logic as `Scripts/usb-topology.py`, which you can run standalone to double check it against reality.
 
 ### Known rough edges to validate on real hardware
 
 A few pieces here were written without a Mac to test against and are the first place to look if something doesn't line up:
 
 - The exact CoreAudio dictionary keys used to build the Multi-Output Device (`Sources/StudioSwitchCore/Audio/CoreAudioMultiOutputDeviceProvider.swift`).
-- UAD Console's window-title format, which the "UAD Console" check matches against (`Sources/StudioSwitchCore/Health/AppleScriptUADConsoleSessionInspector.swift`).
-- The USB power check's field lookup, which matches on key *content* rather than an exact key name specifically because `system_profiler`'s plain-text field labels are localized to the system's language (`Sources/StudioSwitchCore/Health/SystemProfilerUSBPowerProvider.swift`).
+- The channel-pair enumeration and the `kAudioDevicePropertyPreferredChannelsForStereo` write (`Sources/StudioSwitchCore/Health/CoreAudioStatusProvider.swift`'s `availableOutputChannelPairs`, `Sources/StudioSwitchCore/Audio/AudioMIDIConfigurator.swift`'s `setPreferredOutputChannelPair`) — assumes an interface's stereo pairs are always consecutive channel numbers (1/2, 3/4, …), the standard convention but not verified against every interface.

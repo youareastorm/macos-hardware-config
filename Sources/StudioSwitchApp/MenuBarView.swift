@@ -11,6 +11,14 @@ struct MenuBarView: View {
     @State private var showingNewProfileForm = false
     @State private var saveError: String?
     @State private var healthResults: [HealthCheckResult] = []
+    @State private var healthProfile: Profile?
+    @State private var rowOptions: [String: [String]] = [:]
+    @State private var selections: [String: String] = [:]
+    @State private var uadSessions: [UADSessionFile] = []
+    @State private var channelPairs: [ChannelPair] = []
+    @State private var actionMessage: String?
+    @State private var disksExpanded = false
+    @State private var mountedDisks: [MountedDiskInfo] = []
 
     private let profileStore = ProfileStore()
     private let detector: DeviceDetecting = AudioInterfaceDetector()
@@ -21,6 +29,18 @@ struct MenuBarView: View {
     )
     private let dawLauncher = DAWLauncher()
     private let healthChecker = SystemHealthChecker()
+
+    private let audioDeviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()
+    private let audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
+    private let audioConfigurator: AudioMIDIConfiguring = AudioMIDIConfigurator()
+    private let midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider()
+    private let uadConsoleSessionInspector: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
+    private let uadSessionLister: UADSessionListing = FileManagerUADSessionLister()
+    private let uadConsole: UADSessionOpening = UADConsoleController()
+    private let usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
+    private let mountedDiskInspector: MountedDiskInspecting = DiskUtilMountedDiskInspector()
+
+    private static let pickerWidth: CGFloat = 150
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -33,7 +53,7 @@ struct MenuBarView: View {
                     dawLaunchMessage = nil
                     lastResult = activationController.activate(profile)
                     activeProfile = lastResult?.deviceDetected == true ? profile : nil
-                    healthResults = healthChecker.check(for: profile)
+                    refreshHealth(for: profile)
                 }
             }
 
@@ -101,7 +121,99 @@ struct MenuBarView: View {
     /// unlike clicking a profile button.
     private func refreshHealthForConnectedProfile() {
         guard let matched = profiles.first(where: { detector.matchingDeviceName(for: $0) != nil }) else { return }
-        healthResults = healthChecker.check(for: matched)
+        refreshHealth(for: matched)
+    }
+
+    private func refreshHealth(for profile: Profile) {
+        healthResults = healthChecker.check(for: profile)
+        healthProfile = profile
+        actionMessage = nil
+        refreshRowOptions(for: profile)
+    }
+
+    private func refreshRowOptions(for profile: Profile) {
+        let connectedDevices = audioDeviceProvider.connectedDeviceNames().sorted()
+
+        rowOptions["Interface audio"] = connectedDevices
+        selections["Interface audio"] = audioStatus.defaultInputDeviceName() ?? profile.audioDeviceName
+
+        rowOptions["Sorties audio"] = connectedDevices
+        selections["Sorties audio"] = audioStatus.defaultOutputDeviceName() ?? profile.audioDeviceName
+
+        let onlineMIDI = midiStatus.onlineDeviceNames()
+        var midiOptions = onlineMIDI
+        if !midiOptions.contains(where: { $0.caseInsensitiveCompare("IAC Driver") == .orderedSame }) {
+            midiOptions.append("IAC Driver")
+        }
+        rowOptions["MIDI"] = midiOptions
+        selections["MIDI"] = onlineMIDI.first ?? "IAC Driver"
+
+        uadSessions = uadSessionLister.listSessions()
+        let currentSessionTitle = uadConsoleSessionInspector.currentSessionName()
+        rowOptions["UAD Console"] = uadSessions.map(\.name)
+        selections["UAD Console"] = uadSessions.first { currentSessionTitle?.localizedCaseInsensitiveContains($0.name) == true }?.name
+            ?? uadSessions.first?.name ?? ""
+
+        if profile.expectedOutputChannelNames.isEmpty {
+            channelPairs = []
+        } else {
+            channelPairs = audioStatus.availableOutputChannelPairs(forDeviceNamed: profile.audioDeviceName)
+            rowOptions["Canaux de sortie"] = channelPairs.map(\.displayName)
+            if let current = audioStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName), current.count == 2 {
+                selections["Canaux de sortie"] = "\(current[0]) / \(current[1])"
+            } else {
+                selections["Canaux de sortie"] = channelPairs.first?.displayName ?? ""
+            }
+        }
+
+        switch usbPower.checkPower() {
+        case .ok(let details):
+            rowOptions["Alimentation USB"] = details
+            selections["Alimentation USB"] = details.first ?? ""
+        case .unavailable:
+            rowOptions["Alimentation USB"] = []
+            selections["Alimentation USB"] = ""
+        }
+    }
+
+    private func binding(forLabel label: String, profile: Profile) -> Binding<String> {
+        Binding(
+            get: { selections[label] ?? "" },
+            set: { newValue in
+                selections[label] = newValue
+                applySelection(label: label, value: newValue, profile: profile)
+            }
+        )
+    }
+
+    private func applySelection(label: String, value: String, profile: Profile) {
+        actionMessage = nil
+        do {
+            switch label {
+            case "Interface audio":
+                try audioConfigurator.setDefaultInputDevice(named: value)
+                if profile.outputDeviceTargetName == nil {
+                    try audioConfigurator.setDefaultOutputDevice(named: value)
+                }
+            case "Sorties audio":
+                try audioConfigurator.setDefaultOutputDevice(named: value)
+            case "MIDI":
+                try audioConfigurator.enableMIDIDevice(named: value)
+            case "UAD Console":
+                if let session = uadSessions.first(where: { $0.name == value }) {
+                    try uadConsole.openSession(atPath: session.path)
+                }
+            case "Canaux de sortie":
+                if let pair = channelPairs.first(where: { $0.displayName == value }) {
+                    try audioConfigurator.setPreferredOutputChannelPair(pair, forDeviceNamed: profile.audioDeviceName)
+                }
+            default:
+                break
+            }
+        } catch {
+            actionMessage = "Échec de l'action sur \(label) : \(error)"
+        }
+        refreshHealth(for: profile)
     }
 
     private func saveNewProfile(_ profile: Profile) {
@@ -129,25 +241,84 @@ struct MenuBarView: View {
     }
 
     private var healthIndicators: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(healthResults) { result in
+        VStack(alignment: .leading, spacing: 6) {
+            if let healthProfile {
+                ForEach(healthResults) { result in
+                    healthRow(result, profile: healthProfile)
+                }
+                externalDisksDisclosure(profile: healthProfile)
+            }
+            if let actionMessage {
+                Text(actionMessage).font(.caption).foregroundStyle(.orange)
+            }
+            if let activeProfile {
+                Button("Actualiser") {
+                    refreshHealth(for: activeProfile)
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func healthRow(_ result: HealthCheckResult, profile: Profile) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(color(for: result.status))
                         .frame(width: 8, height: 8)
                     Text(result.label)
-                    if let detail = result.info ?? detail(for: result.status) {
-                        Text(detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Picker("", selection: binding(forLabel: result.label, profile: profile)) {
+                    ForEach(rowOptions[result.label] ?? [], id: \.self) { option in
+                        Text(option).tag(option)
                     }
                 }
+                .labelsHidden()
+                .frame(width: Self.pickerWidth, alignment: .trailing)
             }
-            if let activeProfile {
-                Button("Actualiser") {
-                    healthResults = healthChecker.check(for: activeProfile)
+            if let detail = result.info ?? detail(for: result.status) {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 16)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func externalDisksDisclosure(profile: Profile) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                disksExpanded.toggle()
+                if disksExpanded {
+                    mountedDisks = mountedDiskInspector.mountedDisks(matching: profile.expectedExternalDiskNames)
                 }
-                .font(.caption)
+            } label: {
+                HStack {
+                    Text("Disques externes")
+                    Spacer()
+                    Image(systemName: disksExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if disksExpanded {
+                ForEach(mountedDisks) { disk in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Circle().fill(Color.green).frame(width: 8, height: 8)
+                            Text(disk.volumeName)
+                        }
+                        Text(disk.wattage ?? "non remonté par macOS")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 16)
+                    }
+                }
             }
         }
     }

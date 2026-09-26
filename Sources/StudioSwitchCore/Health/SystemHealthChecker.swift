@@ -3,31 +3,29 @@ import Foundation
 public final class SystemHealthChecker {
     private let audioStatus: AudioDeviceStatusProviding
     private let midiStatus: MIDIStatusProviding
-    private let storageProvider: ExternalStorageProviding
     private let uadConsoleSession: UADConsoleSessionInspecting
     private let usbPower: USBPowerInspecting
 
     public init(
         audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
         midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider(),
-        storageProvider: ExternalStorageProviding = FileManagerExternalStorageProvider(),
         uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
         usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
     ) {
         self.audioStatus = audioStatus
         self.midiStatus = midiStatus
-        self.storageProvider = storageProvider
         self.uadConsoleSession = uadConsoleSession
         self.usbPower = usbPower
     }
 
+    /// Every check except external disks, which the menu bar renders as its own expandable
+    /// button (see `MountedDiskInspecting`) rather than a colored-dot row.
     public func check(for profile: Profile) -> [HealthCheckResult] {
         var results = [
             audioInterfaceResult(for: profile),
             outputRoutingResult(for: profile),
             midiResult(),
             uadConsoleResult(for: profile),
-            externalDisksResult(for: profile),
             usbPowerResult()
         ]
         if let channelsResult = outputChannelsResult(for: profile) {
@@ -119,20 +117,6 @@ public final class SystemHealthChecker {
 
     private func expectedSessionName(fromPath path: String) -> String {
         (path as NSString).lastPathComponent.replacingOccurrences(of: ".uadmix", with: "")
-    }
-
-    private func externalDisksResult(for profile: Profile) -> HealthCheckResult {
-        guard !profile.expectedExternalDiskNames.isEmpty else {
-            return HealthCheckResult(label: "Disques externes", status: .ok)
-        }
-
-        let mounted = Set(storageProvider.mountedExternalVolumeNames())
-        let missing = profile.expectedExternalDiskNames.filter { !mounted.contains($0) }
-        guard missing.isEmpty else {
-            return HealthCheckResult(label: "Disques externes", status: .error("Manquants : \(missing.joined(separator: ", "))"))
-        }
-
-        return HealthCheckResult(label: "Disques externes", status: .ok)
     }
 
     private func usbPowerResult() -> HealthCheckResult {
