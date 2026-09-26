@@ -1,11 +1,12 @@
-/// Outcome of a USB health check: whether `system_profiler` could enumerate USB devices at all,
-/// or not (distinct from "checked and found nothing wrong" — conflating the two would silently
-/// hide a real problem). Doesn't include a per-device "underpowered" case: no available macOS API
-/// (system_profiler's `SPUSBHostDataType` JSON, `ioreg -p IOUSB`) exposes the "current required"
-/// side of that comparison on this host stack — see SystemProfilerUSBPowerProvider for what was
-/// tried and empirically ruled out.
+/// Outcome of a USB health check: whether `system_profiler` could enumerate USB devices at all
+/// (with the wattage it reports per bus-powered device, for display), or not (distinct from
+/// "checked and found nothing wrong" — conflating the two would silently hide a real problem).
+/// Doesn't include a per-device "underpowered" case: no available macOS API (system_profiler's
+/// `SPUSBHostDataType` JSON, `ioreg -p IOUSB`) exposes the "current required" side of that
+/// comparison on this host stack — see SystemProfilerUSBPowerProvider for what was tried and
+/// empirically ruled out.
 public enum USBPowerCheckOutcome: Equatable {
-    case ok
+    case ok([String])
     case unavailable
 }
 

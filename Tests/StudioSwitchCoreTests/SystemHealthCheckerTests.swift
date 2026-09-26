@@ -33,7 +33,7 @@ private final class MockUADConsoleSessionInspector: UADConsoleSessionInspecting 
 }
 
 private final class MockUSBPowerInspector: USBPowerInspecting {
-    var outcome: USBPowerCheckOutcome = .ok
+    var outcome: USBPowerCheckOutcome = .ok([])
     func checkPower() -> USBPowerCheckOutcome { outcome }
 }
 
@@ -274,6 +274,19 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .ok)
+    }
+
+    func test_usbPower_surfacesPerDeviceWattageAsInfo() {
+        let usbPower = MockUSBPowerInspector()
+        usbPower.outcome = .ok(["Netac MobileDataStar : 4.48 W (896 mA)", "USB Storage : 4.48 W (896 mA)"])
+        let checker = makeChecker(usbPower: usbPower)
+
+        let results = checker.check(for: profile)
+
+        XCTAssertEqual(
+            results.first(where: { $0.label == "Alimentation USB" })?.info,
+            "Netac MobileDataStar : 4.48 W (896 mA), USB Storage : 4.48 W (896 mA)"
+        )
     }
 
     func test_usbPower_warnsWhenCheckUnavailable() {

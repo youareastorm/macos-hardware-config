@@ -136,7 +136,7 @@ struct MenuBarView: View {
                         .fill(color(for: result.status))
                         .frame(width: 8, height: 8)
                     Text(result.label)
-                    if let detail = detail(for: result.status) {
+                    if let detail = result.info ?? detail(for: result.status) {
                         Text(detail)
                             .font(.caption)
                             .foregroundStyle(.secondary)

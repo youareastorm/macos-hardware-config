@@ -27,7 +27,27 @@ public final class SystemProfilerUSBPowerProvider: USBPowerInspecting {
               !buses.isEmpty else {
             return .unavailable
         }
-        return .ok
+
+        var details: [String] = []
+        for bus in buses {
+            collectPowerAllocations(from: bus, into: &details)
+        }
+        return .ok(details)
+    }
+
+    /// Walks the bus tree collecting "<name> : <power>" for every bus-powered device — the ones
+    /// with a `USBDeviceKeyPowerAllocation` (self-powered devices like `audioDeviceName` itself
+    /// don't draw bus power, so they don't carry this key).
+    private func collectPowerAllocations(from node: [String: Any], into details: inout [String]) {
+        if let name = node["_name"] as? String,
+           let allocation = node["USBDeviceKeyPowerAllocation"] as? String {
+            details.append("\(name) : \(allocation)")
+        }
+        if let children = node["_items"] as? [[String: Any]] {
+            for child in children {
+                collectPowerAllocations(from: child, into: &details)
+            }
+        }
     }
 
     private func runSystemProfilerJSON() -> [String: Any]? {
