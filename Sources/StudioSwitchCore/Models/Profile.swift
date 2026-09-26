@@ -24,6 +24,12 @@ public struct Profile: Codable, Equatable {
     public let expectedSampleRate: Double?
     public let expectedExternalDiskNames: [String]
     public let expectedOutputDeviceNames: [String]
+    /// Names of the two channels `audioDeviceName` should have as its default output pair, e.g.
+    /// `["VIRTUAL 1", "VIRTUAL 2"]` on a UA Apollo routed to its software-return channels instead
+    /// of its main outs. Distinct from `expectedOutputDeviceNames`, which combines separate
+    /// CoreAudio devices — this checks a channel pair *within* a single device. Empty means the
+    /// profile doesn't care which channel pair is active.
+    public let expectedOutputChannelNames: [String]
 
     public init(
         name: String,
@@ -34,7 +40,8 @@ public struct Profile: Codable, Equatable {
         daws: [DAWEntry],
         expectedSampleRate: Double? = nil,
         expectedExternalDiskNames: [String] = [],
-        expectedOutputDeviceNames: [String] = []
+        expectedOutputDeviceNames: [String] = [],
+        expectedOutputChannelNames: [String] = []
     ) {
         self.name = name
         self.deviceNameMatch = deviceNameMatch
@@ -45,6 +52,7 @@ public struct Profile: Codable, Equatable {
         self.expectedSampleRate = expectedSampleRate
         self.expectedExternalDiskNames = expectedExternalDiskNames
         self.expectedOutputDeviceNames = expectedOutputDeviceNames
+        self.expectedOutputChannelNames = expectedOutputChannelNames
     }
 
     public init(from decoder: Decoder) throws {
@@ -58,6 +66,7 @@ public struct Profile: Codable, Equatable {
         expectedSampleRate = try container.decodeIfPresent(Double.self, forKey: .expectedSampleRate)
         expectedExternalDiskNames = try container.decodeIfPresent([String].self, forKey: .expectedExternalDiskNames) ?? []
         expectedOutputDeviceNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputDeviceNames) ?? []
+        expectedOutputChannelNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputChannelNames) ?? []
     }
 }
 

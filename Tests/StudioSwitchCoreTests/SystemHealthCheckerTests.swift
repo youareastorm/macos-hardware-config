@@ -7,12 +7,14 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     var defaultOutput: String?
     var defaultInput: String?
     var builtInOutput: String?
+    var outputChannels: [String: [String]] = [:]
 
     func isDeviceOnline(named deviceName: String) -> Bool { onlineDeviceNames.contains(deviceName) }
     func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? { sampleRates[deviceName] }
     func defaultOutputDeviceName() -> String? { defaultOutput }
     func defaultInputDeviceName() -> String? { defaultInput }
     func builtInOutputDeviceName() -> String? { builtInOutput }
+    func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { outputChannels[deviceName] }
 }
 
 private final class MockMIDIStatusProvider: MIDIStatusProviding {
@@ -292,5 +294,56 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
+    }
+
+    func test_outputChannels_absentWhenProfileHasNoExpectedChannels() {
+        let checker = makeChecker()
+
+        let results = checker.check(for: profile)
+
+        XCTAssertNil(results.first(where: { $0.label == "Canaux de sortie" }))
+    }
+
+    func test_outputChannels_okWhenCurrentPairMatchesExpectedCaseInsensitively() {
+        let profileWithChannels = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            expectedOutputChannelNames: ["Virtual 1", "Virtual 2"]
+        )
+        let audioStatus = MockAudioDeviceStatusProvider()
+        audioStatus.outputChannels["Universal Audio Thunderbolt"] = ["VIRTUAL 1", "VIRTUAL 2"]
+        let checker = makeChecker(audioStatus: audioStatus)
+
+        let results = checker.check(for: profileWithChannels)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .ok)
+    }
+
+    func test_outputChannels_errorsWhenCurrentPairDoesNotMatchExpected() {
+        let profileWithChannels = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+        )
+        let audioStatus = MockAudioDeviceStatusProvider()
+        audioStatus.outputChannels["Universal Audio Thunderbolt"] = ["Main 1", "Main 2"]
+        let checker = makeChecker(audioStatus: audioStatus)
+
+        let results = checker.check(for: profileWithChannels)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .error("Actuellement : Main 1, Main 2"))
+    }
+
+    func test_outputChannels_errorsWhenChannelsCannotBeRead() {
+        let profileWithChannels = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+        )
+        let checker = makeChecker()
+
+        let results = checker.check(for: profileWithChannels)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .error("Impossible de lire les canaux de Universal Audio Thunderbolt"))
     }
 }

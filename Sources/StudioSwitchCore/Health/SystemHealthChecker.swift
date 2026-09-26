@@ -22,7 +22,7 @@ public final class SystemHealthChecker {
     }
 
     public func check(for profile: Profile) -> [HealthCheckResult] {
-        [
+        var results = [
             audioInterfaceResult(for: profile),
             outputRoutingResult(for: profile),
             midiResult(),
@@ -30,6 +30,26 @@ public final class SystemHealthChecker {
             externalDisksResult(for: profile),
             usbPowerResult()
         ]
+        if let channelsResult = outputChannelsResult(for: profile) {
+            results.append(channelsResult)
+        }
+        return results
+    }
+
+    private func outputChannelsResult(for profile: Profile) -> HealthCheckResult? {
+        guard !profile.expectedOutputChannelNames.isEmpty else { return nil }
+
+        guard let current = audioStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName) else {
+            return HealthCheckResult(label: "Canaux de sortie", status: .error("Impossible de lire les canaux de \(profile.audioDeviceName)"))
+        }
+
+        let matches = current.count == profile.expectedOutputChannelNames.count
+            && zip(current, profile.expectedOutputChannelNames).allSatisfy { $0.caseInsensitiveCompare($1) == .orderedSame }
+        guard matches else {
+            return HealthCheckResult(label: "Canaux de sortie", status: .error("Actuellement : \(current.joined(separator: ", "))"))
+        }
+
+        return HealthCheckResult(label: "Canaux de sortie", status: .ok)
     }
 
     private func audioInterfaceResult(for profile: Profile) -> HealthCheckResult {

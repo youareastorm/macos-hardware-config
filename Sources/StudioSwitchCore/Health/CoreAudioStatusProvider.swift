@@ -42,6 +42,43 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
         return nil
     }
 
+    public func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? {
+        guard let deviceID = deviceProvider.deviceID(named: deviceName) else { return nil }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyPreferredChannelsForStereo,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
+
+        var channels = [UInt32](repeating: 0, count: 2)
+        var size = UInt32(MemoryLayout<UInt32>.size * 2)
+        let status = channels.withUnsafeMutableBufferPointer { buffer -> OSStatus in
+            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, buffer.baseAddress!)
+        }
+        guard status == noErr else { return nil }
+
+        return channels.map { channelName(forDeviceID: deviceID, channel: $0) ?? "Canal \($0)" }
+    }
+
+    private func channelName(forDeviceID deviceID: AudioDeviceID, channel: UInt32) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyElementName,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: channel
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
+        var name: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        let status = withUnsafeMutablePointer(to: &name) { pointer -> OSStatus in
+            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, pointer)
+        }
+        guard status == noErr else { return nil }
+        let value = name as String
+        return value.isEmpty ? nil : value
+    }
+
     private func defaultDeviceName(selector: AudioObjectPropertySelector) -> String? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,

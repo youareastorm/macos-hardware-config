@@ -13,6 +13,7 @@ struct MenuBarView: View {
     @State private var healthResults: [HealthCheckResult] = []
 
     private let profileStore = ProfileStore()
+    private let detector: DeviceDetecting = AudioInterfaceDetector()
     private let activationController = ProfileActivationController(
         detector: AudioInterfaceDetector(),
         configurator: AudioMIDIConfigurator(),
@@ -89,9 +90,18 @@ struct MenuBarView: View {
     private func loadProfiles() {
         do {
             profiles = try profileStore.loadProfiles()
+            refreshHealthForConnectedProfile()
         } catch {
             loadError = "\(error)"
         }
+    }
+
+    /// Shows health indicators as soon as the app opens, for whichever profile matches the
+    /// currently connected hardware — read-only (no device switching, no UAD Console opening),
+    /// unlike clicking a profile button.
+    private func refreshHealthForConnectedProfile() {
+        guard let matched = profiles.first(where: { detector.matchingDeviceName(for: $0) != nil }) else { return }
+        healthResults = healthChecker.check(for: matched)
     }
 
     private func saveNewProfile(_ profile: Profile) {
