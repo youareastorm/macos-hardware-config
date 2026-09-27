@@ -11,7 +11,11 @@ import Foundation
 ///
 /// `set frontmost to true` before the keystrokes is load-bearing, not cosmetic: without it the
 /// keystrokes don't reliably reach UAD Console (it isn't frontmost yet), and nothing happens —
-/// silently, with no error. This used to also send `tell application "UAD Console" to activate`
+/// silently, with no error. It also needs a short delay right after it, verified on real hardware:
+/// clicking the File menu immediately (no delay) sometimes lands before UAD Console has actually
+/// finished coming forward, and the whole rest of the script then silently no-ops — same failure
+/// mode, no AppleScript error, just nothing happening. This used to also send `tell application
+/// "UAD Console" to activate`
 /// first, sent straight to UAD Console rather than through System Events — verified on real
 /// hardware to need its own separate Automation grant (this app controlling "UAD Console"
 /// directly), distinct from the System Events grant everything else here relies on, and one that
@@ -40,6 +44,7 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
         tell application "System Events"
             tell process "\(Self.escaped(processName))"
                 set frontmost to true
+                delay 0.5
                 click menu item "Open..." of menu "File" of menu bar 1
                 delay 0.6
                 keystroke "g" using {command down, shift down}
