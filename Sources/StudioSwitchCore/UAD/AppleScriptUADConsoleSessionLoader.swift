@@ -9,9 +9,16 @@ import Foundation
 /// UAD Console's own File > Open... menu through System Events, then typing the path into the
 /// standard open panel via its "Go to Folder" shortcut (Cmd+Shift+G).
 ///
-/// `activate` and `set frontmost to true` before the keystrokes are load-bearing, not cosmetic:
-/// without them the keystrokes don't reliably reach UAD Console (it isn't frontmost yet), and
-/// nothing happens — silently, with no error.
+/// `set frontmost to true` before the keystrokes is load-bearing, not cosmetic: without it the
+/// keystrokes don't reliably reach UAD Console (it isn't frontmost yet), and nothing happens —
+/// silently, with no error. This used to also send `tell application "UAD Console" to activate`
+/// first, sent straight to UAD Console rather than through System Events — verified on real
+/// hardware to need its own separate Automation grant (this app controlling "UAD Console"
+/// directly), distinct from the System Events grant everything else here relies on, and one that
+/// never got authorized (it doesn't even appear as a toggle in System Settings > Automation,
+/// unlike System Events, which does). Removed: `set frontmost to true`, sent through System
+/// Events like the rest of this script, brings UAD Console forward exactly the same way and only
+/// needs the one grant this app already has.
 ///
 /// Also seen on real hardware: the Open panel can fail to close after the final key press (a slow
 /// navigation, a focus hiccup) and just sit there — previously that looked like success (no
@@ -30,8 +37,6 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
 
     public func loadSession(atPath path: String) throws {
         let source = """
-        tell application "UAD Console" to activate
-        delay 0.5
         tell application "System Events"
             tell process "\(Self.escaped(processName))"
                 set frontmost to true
