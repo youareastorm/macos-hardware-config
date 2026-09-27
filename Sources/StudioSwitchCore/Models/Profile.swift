@@ -30,6 +30,12 @@ public struct Profile: Codable, Equatable {
     /// CoreAudio devices — this checks a channel pair *within* a single device. Empty means the
     /// profile doesn't care which channel pair is active.
     public let expectedOutputChannelNames: [String]
+    /// Session names (matched the same loose, case-insensitive-substring way `uadConsoleSession`
+    /// alone used to be) that all count as a healthy UAD Console state for this profile — e.g. a
+    /// Home profile might accept several different session files depending on what's being worked
+    /// on, not just the one `uadConsoleSession` opens by default. Empty means fall back to matching
+    /// `uadConsoleSession` alone, the original single-session behavior.
+    public let expectedUADConsoleSessionNames: [String]
 
     public init(
         name: String,
@@ -41,7 +47,8 @@ public struct Profile: Codable, Equatable {
         expectedSampleRate: Double? = nil,
         expectedExternalDiskNames: [String] = [],
         expectedOutputDeviceNames: [String] = [],
-        expectedOutputChannelNames: [String] = []
+        expectedOutputChannelNames: [String] = [],
+        expectedUADConsoleSessionNames: [String] = []
     ) {
         self.name = name
         self.deviceNameMatch = deviceNameMatch
@@ -53,6 +60,7 @@ public struct Profile: Codable, Equatable {
         self.expectedExternalDiskNames = expectedExternalDiskNames
         self.expectedOutputDeviceNames = expectedOutputDeviceNames
         self.expectedOutputChannelNames = expectedOutputChannelNames
+        self.expectedUADConsoleSessionNames = expectedUADConsoleSessionNames
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,6 +75,7 @@ public struct Profile: Codable, Equatable {
         expectedExternalDiskNames = try container.decodeIfPresent([String].self, forKey: .expectedExternalDiskNames) ?? []
         expectedOutputDeviceNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputDeviceNames) ?? []
         expectedOutputChannelNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputChannelNames) ?? []
+        expectedUADConsoleSessionNames = try container.decodeIfPresent([String].self, forKey: .expectedUADConsoleSessionNames) ?? []
     }
 }
 

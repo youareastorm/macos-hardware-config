@@ -205,6 +205,36 @@ final class SystemHealthCheckerTests: XCTestCase {
         XCTAssertEqual(results.first(where: { $0.label == "UAD Console" })?.status, .ok)
     }
 
+    func test_uadConsole_okWhenSessionMatchesAnyAcceptedName() {
+        let profileWithAcceptedNames = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "~/Documents/Universal Audio/Sessions/empty home.uadmix", useIACDriver: false, daws: [],
+            expectedUADConsoleSessionNames: ["EMPTY", "empty home", "home guit vox", "VOCALS"]
+        )
+        let uadConsoleSession = MockUADConsoleSessionInspector()
+        uadConsoleSession.sessionName = "UAD Console: VOCALS"
+        let checker = makeChecker(uadConsoleSession: uadConsoleSession)
+
+        let results = checker.check(for: profileWithAcceptedNames)
+
+        XCTAssertEqual(results.first(where: { $0.label == "UAD Console" })?.status, .ok)
+    }
+
+    func test_uadConsole_errorsWhenSessionMatchesNoneOfAcceptedNames() {
+        let profileWithAcceptedNames = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "~/Documents/Universal Audio/Sessions/empty home.uadmix", useIACDriver: false, daws: [],
+            expectedUADConsoleSessionNames: ["EMPTY", "empty home", "home guit vox", "VOCALS"]
+        )
+        let uadConsoleSession = MockUADConsoleSessionInspector()
+        uadConsoleSession.sessionName = "UAD Console: octo"
+        let checker = makeChecker(uadConsoleSession: uadConsoleSession)
+
+        let results = checker.check(for: profileWithAcceptedNames)
+
+        XCTAssertEqual(results.first(where: { $0.label == "UAD Console" })?.status, .error("Session ouverte : UAD Console: octo"))
+    }
+
     func test_outputChannels_absentWhenProfileHasNoExpectedChannels() {
         let checker = makeChecker()
 

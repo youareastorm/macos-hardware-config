@@ -94,8 +94,10 @@ public final class SystemHealthChecker {
             return HealthCheckResult(label: "UAD Console", status: .error("UAD Console non lancé ou aucune session ouverte"))
         }
 
-        let expectedName = expectedSessionName(fromPath: profile.uadConsoleSession)
-        guard currentSession.localizedCaseInsensitiveContains(expectedName) else {
+        let acceptedNames = profile.expectedUADConsoleSessionNames.isEmpty
+            ? [expectedSessionName(fromPath: profile.uadConsoleSession)]
+            : profile.expectedUADConsoleSessionNames
+        guard acceptedNames.contains(where: { currentSession.localizedCaseInsensitiveContains($0) }) else {
             return HealthCheckResult(label: "UAD Console", status: .error("Session ouverte : \(currentSession)"))
         }
 
