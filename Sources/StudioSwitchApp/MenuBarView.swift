@@ -49,9 +49,7 @@ struct MenuBarView: View {
             ForEach(Array(profiles.enumerated()), id: \.offset) { _, profile in
                 Button(profile.name) {
                     dawLaunchMessage = nil
-                    lastResult = activationController.activate(profile)
-                    activeProfile = lastResult?.deviceDetected == true ? profile : nil
-                    refreshHealth(for: profile)
+                    activateProfile(profile)
                 }
             }
 
@@ -103,6 +101,41 @@ struct MenuBarView: View {
         }
         .padding(12)
         .onAppear(perform: loadProfiles)
+    }
+
+    /// Runs the real activation (which can drive UAD Console via AppleScript for several seconds)
+    /// off the main thread — this used to block MenuBarView's popover for that whole time, which
+    /// could leave a UAD Console automation attempt half-finished if the view lost focus or another
+    /// action fired while it was still running.
+    private func activateProfile(_ profile: Profile) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = activationController.activate(profile)
+            DispatchQueue.main.async {
+                lastResult = result
+                activeProfile = result.deviceDetected ? profile : nil
+                refreshHealth(for: profile)
+            }
+        }
+    }
+
+    /// Same reasoning as `activateProfile`: keeps a slow, AppleScript-driven action (opening UAD
+    /// Console with a specific session) off the main thread so the popover stays responsive while
+    /// it runs, instead of freezing for several seconds.
+    private func performInBackground(errorPrefix: String, profile: Profile, _ work: @escaping () throws -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var caughtError: Error?
+            do {
+                try work()
+            } catch {
+                caughtError = error
+            }
+            DispatchQueue.main.async {
+                if let caughtError {
+                    actionMessage = "\(errorPrefix) : \(caughtError)"
+                }
+                refreshHealth(for: profile)
+            }
+        }
     }
 
     private func loadProfiles() {
@@ -169,6 +202,17 @@ struct MenuBarView: View {
 
     private func applySelection(label: String, value: String, profile: Profile) {
         actionMessage = nil
+        if label == "UAD Console" {
+            guard let session = uadSessions.first(where: { $0.name == value }) else {
+                refreshHealth(for: profile)
+                return
+            }
+            performInBackground(errorPrefix: "Échec de l'action sur UAD Console", profile: profile) {
+                try uadConsole.openSession(atPath: session.path)
+            }
+            return
+        }
+
         do {
             switch label {
             case "Interface audio":
@@ -178,10 +222,6 @@ struct MenuBarView: View {
                 }
             case "Sortie HP":
                 try audioConfigurator.setDefaultOutputDevice(named: value)
-            case "UAD Console":
-                if let session = uadSessions.first(where: { $0.name == value }) {
-                    try uadConsole.openSession(atPath: session.path)
-                }
             case "Canaux de sortie":
                 if let pair = channelPairs.first(where: { $0.displayName == value }) {
                     try audioConfigurator.setPreferredOutputChannelPair(pair, forDeviceNamed: profile.audioDeviceName)
@@ -197,12 +237,9 @@ struct MenuBarView: View {
 
     private func openUADConsole(profile: Profile) {
         actionMessage = nil
-        do {
+        performInBackground(errorPrefix: "Échec de l'ouverture d'UAD Console", profile: profile) {
             try uadConsole.openSession(atPath: profile.uadConsoleSession)
-        } catch {
-            actionMessage = "Échec de l'ouverture d'UAD Console : \(error)"
         }
-        refreshHealth(for: profile)
     }
 
     private func openAudioMIDISetup() {
