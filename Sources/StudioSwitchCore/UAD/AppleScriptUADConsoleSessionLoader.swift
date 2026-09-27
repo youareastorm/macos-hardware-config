@@ -12,12 +12,21 @@ import Foundation
 /// `activate` and `set frontmost to true` before the keystrokes are load-bearing, not cosmetic:
 /// without them the keystrokes don't reliably reach UAD Console (it isn't frontmost yet), and
 /// nothing happens — silently, with no error.
+///
+/// Also seen on real hardware: the Open panel can fail to close after the final key press (a slow
+/// navigation, a focus hiccup) and just sit there — previously that looked like success (no
+/// AppleScript error), while `AppleScriptUADConsoleSessionInspector` went on to read the stuck
+/// panel's own title ("Choose a session file to open:") back as if it were the loaded session.
+/// This now polls for the panel to actually close afterward and raises a real error if it's still
+/// open a few seconds later, instead of assuming the four keystrokes landed correctly.
 public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading {
     private let processName: String
 
     public init(processName: String = "UAD Console") {
         self.processName = processName
     }
+
+    private static let openPanelTitle = "Choose a session file to open:"
 
     public func loadSession(atPath path: String) throws {
         let source = """
@@ -35,6 +44,11 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
                 key code 36
                 delay 1
                 key code 36
+                repeat 30 times
+                    if not (exists window "\(Self.openPanelTitle)") then exit repeat
+                    delay 0.2
+                end repeat
+                if exists window "\(Self.openPanelTitle)" then error "le panneau d'ouverture ne s'est pas fermé — le chargement a probablement échoué"
             end tell
         end tell
         """

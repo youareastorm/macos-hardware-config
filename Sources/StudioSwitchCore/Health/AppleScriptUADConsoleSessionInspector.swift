@@ -11,8 +11,16 @@ import Foundation
 /// signature can silently invalidate a previously granted Accessibility permission for it; when
 /// that happens, toggling the entry off/on in Accessibility settings is not enough to re-arm it —
 /// it has to be removed (the "−" button) and re-granted from scratch.
+///
+/// Also verified on real hardware: `window 1` isn't necessarily UAD Console's session window. If
+/// `AppleScriptUADConsoleSessionLoader`'s own File > Open automation leaves its panel open (it
+/// failed to close one after a slow navigation), that panel becomes `window 1` — titled "Choose a
+/// session file to open:" — and this used to read that title back as if it were a session name.
+/// UAD Console's real session windows are always titled "UAD Console: <session>", so this now
+/// only matches windows starting with that prefix and ignores anything else.
 public final class AppleScriptUADConsoleSessionInspector: UADConsoleSessionInspecting {
     private let processName: String
+    private static let windowTitlePrefix = "UAD Console:"
 
     public init(processName: String = "UAD Console") {
         self.processName = processName
@@ -23,8 +31,9 @@ public final class AppleScriptUADConsoleSessionInspector: UADConsoleSessionInspe
         tell application "System Events"
             if not (exists process "\(processName)") then return ""
             tell process "\(processName)"
-                if not (exists window 1) then return ""
-                return name of window 1
+                set matchingWindows to (windows whose name begins with "\(Self.windowTitlePrefix)")
+                if (count of matchingWindows) = 0 then return ""
+                return name of item 1 of matchingWindows
             end tell
         end tell
         """
