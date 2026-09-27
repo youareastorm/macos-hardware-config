@@ -2,37 +2,25 @@ import Foundation
 
 public final class SystemHealthChecker {
     private let audioStatus: AudioDeviceStatusProviding
-    private let midiStatus: MIDIStatusProviding
     private let uadConsoleSession: UADConsoleSessionInspecting
-    private let usbPower: USBPowerInspecting
-    private let usbPowerFaultDetector: USBPowerFaultDetecting
-
-    /// How far back the "Alimentation USB" check looks in the kernel log for power-fault signs.
-    private static let usbLogWindow: TimeInterval = 15 * 60
 
     public init(
         audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
-        midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider(),
-        uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
-        usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider(),
-        usbPowerFaultDetector: USBPowerFaultDetecting = IOKitUSBPowerFaultDetector()
+        uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
     ) {
         self.audioStatus = audioStatus
-        self.midiStatus = midiStatus
         self.uadConsoleSession = uadConsoleSession
-        self.usbPower = usbPower
-        self.usbPowerFaultDetector = usbPowerFaultDetector
     }
 
     /// Every check except external disks, which the menu bar renders as its own expandable
-    /// button (see `MountedDiskInspecting`) rather than a colored-dot row.
+    /// button (see `MountedDiskInspecting`) rather than a colored-dot row. MIDI and USB power
+    /// checks were dropped from the menu bar entirely; their providers remain available for
+    /// future use but nothing here calls them anymore.
     public func check(for profile: Profile) -> [HealthCheckResult] {
         var results = [
             audioInterfaceResult(for: profile),
             outputRoutingResult(for: profile),
-            midiResult(),
-            uadConsoleResult(for: profile),
-            usbPowerResult()
+            uadConsoleResult(for: profile)
         ]
         if let channelsResult = outputChannelsResult(for: profile) {
             results.append(channelsResult)
@@ -85,27 +73,20 @@ public final class SystemHealthChecker {
     private func outputRoutingResult(for profile: Profile) -> HealthCheckResult {
         guard let target = profile.outputDeviceTargetName else {
             guard audioStatus.builtInOutputDeviceName() != nil else {
-                return HealthCheckResult(label: "Sorties audio", status: .error("Haut-parleurs Mac non détectés"))
+                return HealthCheckResult(label: "Sortie HP", status: .error("Haut-parleurs Mac non détectés"))
             }
-            return HealthCheckResult(label: "Sorties audio", status: .ok)
+            return HealthCheckResult(label: "Sortie HP", status: .ok)
         }
 
         guard let currentOutput = audioStatus.defaultOutputDeviceName() else {
-            return HealthCheckResult(label: "Sorties audio", status: .error("Aucune sortie par défaut détectée"))
+            return HealthCheckResult(label: "Sortie HP", status: .error("Aucune sortie par défaut détectée"))
         }
 
         guard currentOutput.caseInsensitiveCompare(target) == .orderedSame else {
-            return HealthCheckResult(label: "Sorties audio", status: .error("Sortie actuelle : \(currentOutput)"))
+            return HealthCheckResult(label: "Sortie HP", status: .error("Sortie actuelle : \(currentOutput)"))
         }
 
-        return HealthCheckResult(label: "Sorties audio", status: .ok)
-    }
-
-    private func midiResult() -> HealthCheckResult {
-        guard !midiStatus.onlineDeviceNames().isEmpty else {
-            return HealthCheckResult(label: "MIDI", status: .warning("Aucun périphérique en ligne"))
-        }
-        return HealthCheckResult(label: "MIDI", status: .ok)
+        return HealthCheckResult(label: "Sortie HP", status: .ok)
     }
 
     private func uadConsoleResult(for profile: Profile) -> HealthCheckResult {
@@ -123,24 +104,5 @@ public final class SystemHealthChecker {
 
     private func expectedSessionName(fromPath path: String) -> String {
         (path as NSString).lastPathComponent.replacingOccurrences(of: ".uadmix", with: "")
-    }
-
-    private func usbPowerResult() -> HealthCheckResult {
-        let incidents = usbPowerFaultDetector.recentPowerIncidents(within: Self.usbLogWindow)
-        if !incidents.isEmpty {
-            let preview = incidents.suffix(3).map(\.line).joined(separator: " | ")
-            return HealthCheckResult(
-                label: "Alimentation USB",
-                status: .error("\(incidents.count) évènement(s) suspect(s) dans les 15 dernières minutes"),
-                info: preview
-            )
-        }
-
-        switch usbPower.checkPower() {
-        case .ok(let details):
-            return HealthCheckResult(label: "Alimentation USB", status: .ok, info: details.isEmpty ? nil : details.joined(separator: ", "))
-        case .unavailable:
-            return HealthCheckResult(label: "Alimentation USB", status: .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
-        }
     }
 }

@@ -20,24 +20,9 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { availableChannelPairs[deviceName] ?? [] }
 }
 
-private final class MockMIDIStatusProvider: MIDIStatusProviding {
-    var names: [String] = []
-    func onlineDeviceNames() -> [String] { names }
-}
-
 private final class MockUADConsoleSessionInspector: UADConsoleSessionInspecting {
     var sessionName: String?
     func currentSessionName() -> String? { sessionName }
-}
-
-private final class MockUSBPowerInspector: USBPowerInspecting {
-    var outcome: USBPowerCheckOutcome = .ok([])
-    func checkPower() -> USBPowerCheckOutcome { outcome }
-}
-
-private final class MockUSBPowerFaultDetector: USBPowerFaultDetecting {
-    var incidents: [USBPowerIncident] = []
-    func recentPowerIncidents(within window: TimeInterval) -> [USBPowerIncident] { incidents }
 }
 
 final class SystemHealthCheckerTests: XCTestCase {
@@ -52,17 +37,11 @@ final class SystemHealthCheckerTests: XCTestCase {
 
     private func makeChecker(
         audioStatus: MockAudioDeviceStatusProvider = MockAudioDeviceStatusProvider(),
-        midiStatus: MockMIDIStatusProvider = MockMIDIStatusProvider(),
-        uadConsoleSession: MockUADConsoleSessionInspector = MockUADConsoleSessionInspector(),
-        usbPower: MockUSBPowerInspector = MockUSBPowerInspector(),
-        usbPowerFaultDetector: MockUSBPowerFaultDetector = MockUSBPowerFaultDetector()
+        uadConsoleSession: MockUADConsoleSessionInspector = MockUADConsoleSessionInspector()
     ) -> SystemHealthChecker {
         SystemHealthChecker(
             audioStatus: audioStatus,
-            midiStatus: midiStatus,
-            uadConsoleSession: uadConsoleSession,
-            usbPower: usbPower,
-            usbPowerFaultDetector: usbPowerFaultDetector
+            uadConsoleSession: uadConsoleSession
         )
     }
 
@@ -148,7 +127,7 @@ final class SystemHealthCheckerTests: XCTestCase {
 
         let results = checker.check(for: profile)
 
-        XCTAssertEqual(results.first(where: { $0.label == "Sorties audio" })?.status, .error("Haut-parleurs Mac non détectés"))
+        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .error("Haut-parleurs Mac non détectés"))
     }
 
     func test_outputRouting_okWhenBuiltInDeviceDetectedAndNoTargetConfigured() {
@@ -158,7 +137,7 @@ final class SystemHealthCheckerTests: XCTestCase {
 
         let results = checker.check(for: profile)
 
-        XCTAssertEqual(results.first(where: { $0.label == "Sorties audio" })?.status, .ok)
+        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .ok)
     }
 
     func test_outputRouting_errorsWhenCurrentOutputDoesNotMatchTarget() {
@@ -172,7 +151,7 @@ final class SystemHealthCheckerTests: XCTestCase {
 
         let results = checker.check(for: profileWithOutput)
 
-        XCTAssertEqual(results.first(where: { $0.label == "Sorties audio" })?.status, .error("Sortie actuelle : MacBook Pro Speakers"))
+        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .error("Sortie actuelle : MacBook Pro Speakers"))
     }
 
     func test_outputRouting_okWhenCurrentOutputMatchesCombinedTarget() {
@@ -186,25 +165,16 @@ final class SystemHealthCheckerTests: XCTestCase {
 
         let results = checker.check(for: profileWithOutput)
 
-        XCTAssertEqual(results.first(where: { $0.label == "Sorties audio" })?.status, .ok)
+        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .ok)
     }
 
-    func test_midi_warnsWhenNoDeviceOnline() {
+    func test_check_doesNotIncludeMIDIOrUSBPowerRows() {
         let checker = makeChecker()
 
         let results = checker.check(for: profile)
 
-        XCTAssertEqual(results.first(where: { $0.label == "MIDI" })?.status, .warning("Aucun périphérique en ligne"))
-    }
-
-    func test_midi_okWhenDeviceOnline() {
-        let midiStatus = MockMIDIStatusProvider()
-        midiStatus.names = ["IAC Driver Bus 1"]
-        let checker = makeChecker(midiStatus: midiStatus)
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "MIDI" })?.status, .ok)
+        XCTAssertNil(results.first(where: { $0.label == "MIDI" }))
+        XCTAssertNil(results.first(where: { $0.label == "Alimentation USB" }))
     }
 
     func test_uadConsole_errorsWhenNotRunning() {
@@ -233,64 +203,6 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profile)
 
         XCTAssertEqual(results.first(where: { $0.label == "UAD Console" })?.status, .ok)
-    }
-
-    func test_usbPower_okWhenEnumerationWorks() {
-        let checker = makeChecker()
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .ok)
-    }
-
-    func test_usbPower_surfacesPerDeviceWattageAsInfo() {
-        let usbPower = MockUSBPowerInspector()
-        usbPower.outcome = .ok(["Netac MobileDataStar : 4.48 W (896 mA)", "USB Storage : 4.48 W (896 mA)"])
-        let checker = makeChecker(usbPower: usbPower)
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(
-            results.first(where: { $0.label == "Alimentation USB" })?.info,
-            "Netac MobileDataStar : 4.48 W (896 mA), USB Storage : 4.48 W (896 mA)"
-        )
-    }
-
-    func test_usbPower_errorsWhenKernelLogShowsPowerIncidents() {
-        let usbPowerFaultDetector = MockUSBPowerFaultDetector()
-        usbPowerFaultDetector.incidents = [
-            USBPowerIncident(line: "kernel: (IOUSBHostFamily) AppleUSBHostPort: reset failed, not enough power"),
-            USBPowerIncident(line: "kernel: (IOUSBHostFamily) Netac MobileDataStar detached")
-        ]
-        let checker = makeChecker(usbPowerFaultDetector: usbPowerFaultDetector)
-
-        let results = checker.check(for: profile)
-
-        let result = results.first(where: { $0.label == "Alimentation USB" })
-        XCTAssertEqual(result?.status, .error("2 évènement(s) suspect(s) dans les 15 dernières minutes"))
-        XCTAssertEqual(result?.info, "kernel: (IOUSBHostFamily) AppleUSBHostPort: reset failed, not enough power | kernel: (IOUSBHostFamily) Netac MobileDataStar detached")
-    }
-
-    func test_usbPower_ignoresEnumerationCheckWhenIncidentsFound() {
-        let usbPowerFaultDetector = MockUSBPowerFaultDetector()
-        usbPowerFaultDetector.incidents = [USBPowerIncident(line: "kernel: power fault")]
-        let usbPower = MockUSBPowerInspector()
-        usbPower.outcome = .unavailable
-        let checker = makeChecker(usbPower: usbPower, usbPowerFaultDetector: usbPowerFaultDetector)
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .error("1 évènement(s) suspect(s) dans les 15 dernières minutes"))
-    }
-
-    func test_usbPower_warnsWhenCheckUnavailable() {
-        let usbPower = MockUSBPowerInspector()
-        usbPower.outcome = .unavailable
-        let checker = makeChecker(usbPower: usbPower)
-
-        let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Alimentation USB" })?.status, .warning("Impossible de vérifier (system_profiler n'a rien renvoyé)"))
     }
 
     func test_outputChannels_absentWhenProfileHasNoExpectedChannels() {

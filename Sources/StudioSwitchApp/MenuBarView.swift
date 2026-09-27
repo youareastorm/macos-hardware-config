@@ -17,8 +17,6 @@ struct MenuBarView: View {
     @State private var uadSessions: [UADSessionFile] = []
     @State private var channelPairs: [ChannelPair] = []
     @State private var actionMessage: String?
-    @State private var disksExpanded = false
-    @State private var mountedDisks: [MountedDiskInfo] = []
 
     private let profileStore = ProfileStore()
     private let detector: DeviceDetecting = AudioInterfaceDetector()
@@ -28,26 +26,19 @@ struct MenuBarView: View {
         uadConsole: UADConsoleController()
     )
     private let dawLauncher = DAWLauncher()
-    private let usbPowerFaultDetector: USBPowerFaultDetecting
-    private let healthChecker: SystemHealthChecker
+    private let healthChecker = SystemHealthChecker()
 
     private let audioDeviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()
     private let audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
     private let audioConfigurator: AudioMIDIConfiguring = AudioMIDIConfigurator()
-    private let midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider()
     private let uadConsoleSessionInspector: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
     private let uadSessionLister: UADSessionListing = FileManagerUADSessionLister()
     private let uadConsole: UADSessionOpening = UADConsoleController()
-    private let usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
-    private let mountedDiskInspector: MountedDiskInspecting = DiskUtilMountedDiskInspector()
+    private let appLocator: AppLocating = WorkspaceAppLocator()
+    private let appLauncher: AppLaunching = WorkspaceAppLauncher()
 
     private static let pickerWidth: CGFloat = 150
-
-    init() {
-        let detector = IOKitUSBPowerFaultDetector()
-        usbPowerFaultDetector = detector
-        healthChecker = SystemHealthChecker(usbPowerFaultDetector: detector)
-    }
+    private static let audioMIDISetupBundleID = "com.apple.audio.AudioMIDISetup"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -144,16 +135,8 @@ struct MenuBarView: View {
         rowOptions["Interface audio"] = connectedDevices
         selections["Interface audio"] = audioStatus.defaultInputDeviceName() ?? profile.audioDeviceName
 
-        rowOptions["Sorties audio"] = connectedDevices
-        selections["Sorties audio"] = audioStatus.defaultOutputDeviceName() ?? profile.audioDeviceName
-
-        let onlineMIDI = midiStatus.onlineDeviceNames()
-        var midiOptions = onlineMIDI
-        if !midiOptions.contains(where: { $0.caseInsensitiveCompare("IAC Driver") == .orderedSame }) {
-            midiOptions.append("IAC Driver")
-        }
-        rowOptions["MIDI"] = midiOptions
-        selections["MIDI"] = onlineMIDI.first ?? "IAC Driver"
+        rowOptions["Sortie HP"] = connectedDevices
+        selections["Sortie HP"] = audioStatus.defaultOutputDeviceName() ?? profile.audioDeviceName
 
         uadSessions = uadSessionLister.listSessions()
         let currentSessionTitle = uadConsoleSessionInspector.currentSessionName()
@@ -170,21 +153,6 @@ struct MenuBarView: View {
                 selections["Canaux de sortie"] = "\(current[0]) / \(current[1])"
             } else {
                 selections["Canaux de sortie"] = channelPairs.first?.displayName ?? ""
-            }
-        }
-
-        let incidents = usbPowerFaultDetector.recentPowerIncidents(within: 15 * 60).map(\.line)
-        if !incidents.isEmpty {
-            rowOptions["Alimentation USB"] = incidents
-            selections["Alimentation USB"] = incidents.first ?? ""
-        } else {
-            switch usbPower.checkPower() {
-            case .ok(let details):
-                rowOptions["Alimentation USB"] = details
-                selections["Alimentation USB"] = details.first ?? ""
-            case .unavailable:
-                rowOptions["Alimentation USB"] = []
-                selections["Alimentation USB"] = ""
             }
         }
     }
@@ -208,10 +176,8 @@ struct MenuBarView: View {
                 if profile.outputDeviceTargetName == nil {
                     try audioConfigurator.setDefaultOutputDevice(named: value)
                 }
-            case "Sorties audio":
+            case "Sortie HP":
                 try audioConfigurator.setDefaultOutputDevice(named: value)
-            case "MIDI":
-                try audioConfigurator.enableMIDIDevice(named: value)
             case "UAD Console":
                 if let session = uadSessions.first(where: { $0.name == value }) {
                     try uadConsole.openSession(atPath: session.path)
@@ -227,6 +193,29 @@ struct MenuBarView: View {
             actionMessage = "Échec de l'action sur \(label) : \(error)"
         }
         refreshHealth(for: profile)
+    }
+
+    private func openUADConsole(profile: Profile) {
+        actionMessage = nil
+        do {
+            try uadConsole.openSession(atPath: profile.uadConsoleSession)
+        } catch {
+            actionMessage = "Échec de l'ouverture d'UAD Console : \(error)"
+        }
+        refreshHealth(for: profile)
+    }
+
+    private func openAudioMIDISetup() {
+        actionMessage = nil
+        guard let appURL = appLocator.applicationURL(forBundleID: Self.audioMIDISetupBundleID) else {
+            actionMessage = "Configuration audio et MIDI introuvable"
+            return
+        }
+        do {
+            try appLauncher.launchApplication(at: appURL)
+        } catch {
+            actionMessage = "Échec de l'ouverture de Configuration audio et MIDI : \(error)"
+        }
     }
 
     private func saveNewProfile(_ profile: Profile) {
@@ -259,7 +248,6 @@ struct MenuBarView: View {
                 ForEach(healthResults) { result in
                     healthRow(result, profile: healthProfile)
                 }
-                externalDisksDisclosure(profile: healthProfile)
             }
             if let actionMessage {
                 Text(actionMessage).font(.caption).foregroundStyle(.orange)
@@ -277,12 +265,7 @@ struct MenuBarView: View {
     private func healthRow(_ result: HealthCheckResult, profile: Profile) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(color(for: result.status))
-                        .frame(width: 8, height: 8)
-                    Text(result.label)
-                }
+                rowLabel(result, profile: profile)
                 Spacer()
                 Picker("", selection: binding(forLabel: result.label, profile: profile)) {
                     ForEach(rowOptions[result.label] ?? [], id: \.self) { option in
@@ -301,38 +284,29 @@ struct MenuBarView: View {
         }
     }
 
+    /// The dot + name is plain text for most rows, but for "UAD Console" and "Sortie HP" it's
+    /// also a button: clicking the name opens the matching native macOS tool directly, while the
+    /// picker on the right still lets you pick a value the way every other row does.
     @ViewBuilder
-    private func externalDisksDisclosure(profile: Profile) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button {
-                disksExpanded.toggle()
-                if disksExpanded {
-                    mountedDisks = mountedDiskInspector.mountedDisks(matching: profile.expectedExternalDiskNames)
-                }
-            } label: {
-                HStack {
-                    Text("Disques externes")
-                    Spacer()
-                    Image(systemName: disksExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                }
-            }
-            .buttonStyle(.plain)
+    private func rowLabel(_ result: HealthCheckResult, profile: Profile) -> some View {
+        switch result.label {
+        case "UAD Console":
+            Button { openUADConsole(profile: profile) } label: { rowLabelContent(result) }
+                .buttonStyle(.plain)
+        case "Sortie HP":
+            Button { openAudioMIDISetup() } label: { rowLabelContent(result) }
+                .buttonStyle(.plain)
+        default:
+            rowLabelContent(result)
+        }
+    }
 
-            if disksExpanded {
-                ForEach(mountedDisks) { disk in
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Circle().fill(Color.green).frame(width: 8, height: 8)
-                            Text(disk.volumeName)
-                        }
-                        Text(disk.wattage ?? "non remonté par macOS")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.leading, 16)
-                    }
-                }
-            }
+    private func rowLabelContent(_ result: HealthCheckResult) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color(for: result.status))
+                .frame(width: 8, height: 8)
+            Text(result.label)
         }
     }
 
