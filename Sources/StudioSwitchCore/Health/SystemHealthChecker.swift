@@ -15,7 +15,7 @@ public final class SystemHealthChecker {
         midiStatus: MIDIStatusProviding = CoreMIDIStatusProvider(),
         uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
         usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider(),
-        usbPowerFaultDetector: USBPowerFaultDetecting = KernelLogUSBPowerFaultDetector()
+        usbPowerFaultDetector: USBPowerFaultDetecting = IOKitUSBPowerFaultDetector()
     ) {
         self.audioStatus = audioStatus
         self.midiStatus = midiStatus

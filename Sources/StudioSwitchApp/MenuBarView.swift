@@ -28,7 +28,8 @@ struct MenuBarView: View {
         uadConsole: UADConsoleController()
     )
     private let dawLauncher = DAWLauncher()
-    private let healthChecker = SystemHealthChecker()
+    private let usbPowerFaultDetector: USBPowerFaultDetecting
+    private let healthChecker: SystemHealthChecker
 
     private let audioDeviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()
     private let audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
@@ -38,10 +39,15 @@ struct MenuBarView: View {
     private let uadSessionLister: UADSessionListing = FileManagerUADSessionLister()
     private let uadConsole: UADSessionOpening = UADConsoleController()
     private let usbPower: USBPowerInspecting = SystemProfilerUSBPowerProvider()
-    private let usbPowerFaultDetector: USBPowerFaultDetecting = KernelLogUSBPowerFaultDetector()
     private let mountedDiskInspector: MountedDiskInspecting = DiskUtilMountedDiskInspector()
 
     private static let pickerWidth: CGFloat = 150
+
+    init() {
+        let detector = IOKitUSBPowerFaultDetector()
+        usbPowerFaultDetector = detector
+        healthChecker = SystemHealthChecker(usbPowerFaultDetector: detector)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
