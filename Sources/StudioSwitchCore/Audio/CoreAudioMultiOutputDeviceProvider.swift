@@ -6,9 +6,24 @@ import Foundation
 /// requiring the user to have pre-built one in Audio MIDI Setup.
 public final class CoreAudioMultiOutputDeviceProvider: MultiOutputDeviceProviding {
     private let deviceProvider: AudioDeviceProviding
+    private let retryDelay: (TimeInterval) -> Void
 
-    public init(deviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()) {
+    /// After a real `AudioHardwareCreateAggregateDevice` success, the new device isn't always
+    /// immediately visible through `kAudioHardwarePropertyDevices` — verified on real hardware:
+    /// calling `ensureMultiOutputDevice` again right after creating a device (same process, no
+    /// deliberate wait) found the device NOT yet enumerable, attempted to create it again, and
+    /// got back `kAudioHardwareIllegalOperationError` ('nope') because the UID was already taken.
+    /// A later call (a few seconds on, even from a fresh process) found it fine. These bound how
+    /// long the recovery below waits for the HAL to catch up before giving up.
+    private static let creationRetryCount = 5
+    private static let creationRetryDelay: TimeInterval = 0.3
+
+    public init(
+        deviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider(),
+        retryDelay: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
+    ) {
         self.deviceProvider = deviceProvider
+        self.retryDelay = retryDelay
     }
 
     @discardableResult
@@ -35,11 +50,29 @@ public final class CoreAudioMultiOutputDeviceProvider: MultiOutputDeviceProvidin
 
         var aggregateDeviceID: AudioDeviceID = 0
         let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateDeviceID)
-        guard status == noErr else {
+        if status == noErr {
+            return deviceName
+        }
+        guard status == kAudioHardwareIllegalOperationError else {
             throw MultiOutputDeviceError.creationFailed(status)
         }
 
-        return deviceName
+        return try waitForNewlyVisibleDevice(named: deviceName, expectedSubDeviceNames: subDeviceNames, fallbackStatus: status)
+    }
+
+    /// Polls `deviceProvider` for a device this same call just tried (and failed) to create,
+    /// because the HAL rejected it as a duplicate of one that was created moments ago but hasn't
+    /// propagated into the device list yet. Surfaces the original creation error if the device
+    /// still never shows up, rather than pretending the retry always finds one.
+    func waitForNewlyVisibleDevice(named deviceName: String, expectedSubDeviceNames: [String], fallbackStatus: OSStatus) throws -> String {
+        for attempt in 0..<Self.creationRetryCount {
+            if attempt > 0 { retryDelay(Self.creationRetryDelay) }
+            if let deviceID = deviceProvider.deviceID(named: deviceName) {
+                try verifyComposition(of: deviceID, named: deviceName, expectedSubDeviceNames: expectedSubDeviceNames)
+                return deviceName
+            }
+        }
+        throw MultiOutputDeviceError.creationFailed(fallbackStatus)
     }
 
     /// Guards the fast path (device already exists → reuse it) against a name collision with
