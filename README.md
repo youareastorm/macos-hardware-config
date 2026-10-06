@@ -3,13 +3,13 @@ macOS hardware detection and configuration utility
 
 ## StudioSwitch
 
-StudioSwitch is a macOS menu-bar app that detects which Universal Audio interface is connected and configures macOS audio for it: default input/output, an optional combined Multi-Output Device, and the active monitor channel pair (e.g. always `VIRTUAL 1 / VIRTUAL 2`). It does this by itself when the interface is plugged in, and can launch a DAW from the same menu.
+StudioSwitch is a macOS menu-bar app that detects which Universal Audio interface is connected and configures macOS audio for it: default input/output, an optional combined Multi-Output Device, and the active monitor channel pair (e.g. always `VIRTUAL 1 / VIRTUAL 2`). It also makes sure UAD Console is running with the profile's session (e.g. `OCTO EMPTY` at the studio). It does all this by itself when the interface is plugged in, and can launch a DAW from the same menu.
 
 ### Prerequisites
 
 - macOS 13 (Ventura) or later
 - Xcode Command Line Tools (`xcode-select --install`)
-- The target DAWs installed (Logic Pro, Ableton Live, Pro Tools, Cubase, Bitwig Studio)
+- UAD Console (tested with 1.3.1) and the target DAWs installed (Logic Pro, Ableton Live, Pro Tools, Cubase, Bitwig Studio)
 
 ### Build & test
 
@@ -30,7 +30,22 @@ swift run StudioSwitchApp
 ./Scripts/build-app-bundle.sh
 ```
 
-This produces `StudioSwitch.app` at the repo root. Move it to `/Applications`, then add it to Login Items (System Settings → General → Login Items) to have it launch automatically. The bundle is ad-hoc signed; the app no longer needs any special macOS permission (no Automation or Accessibility), so rebuilding it doesn't require re-granting anything.
+This produces `StudioSwitch.app` at the repo root. Move it to `/Applications`, then add it to Login Items (System Settings → General → Login Items) to have it launch automatically.
+
+### Permissions (UAD Console)
+
+Driving UAD Console needs two macOS permissions for StudioSwitch:
+
+- **Automation → System Events**: macOS asks the first time. Survives rebuilds.
+- **Accessibility** (System Settings → Privacy & Security → Accessibility): needed to read UAD Console's window title and drive its File > Open menu. Add `/Applications/StudioSwitch.app` with "+" and make sure it is on.
+
+**After every rebuild the Accessibility permission silently stops working.** The bundle is ad-hoc signed, so each build has a new code identity, and macOS keeps the old entry (still shown as enabled) while refusing the new binary (`tccd: Failed to match existing code requirement … kTCCServiceAccessibility`). Toggling the switch off/on is not enough. Fix:
+
+```bash
+tccutil reset Accessibility com.simonrenard.studioswitch
+```
+
+then add the app again with "+" in Privacy & Security → Accessibility, and relaunch StudioSwitch (removing the permission quits the app). Without this, UAD Console is launched but its session never switches. A stable signing identity (a local code-signing certificate) would remove this step; not set up yet.
 
 ### Configuration
 
@@ -60,7 +75,9 @@ Optional fields:
 - `useIACDriver`: enable the IAC Driver on activation (not yet verified on real hardware).
 - `daws`: the DAWs offered in the menu (`name`, `bundleID`, optional `appPath` and `templatePath` — a project/template file to open the DAW with).
 
-`uadConsoleSession`, `expectedUADConsoleSessionNames` and `expectedExternalDiskNames` are still part of the file format but currently unused (see "What was removed").
+- `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`).
+
+`expectedUADConsoleSessionNames` and `expectedExternalDiskNames` are still part of the file format but currently unused (see "What was removed").
 
 ### Automatic switching
 
@@ -81,8 +98,25 @@ Clicking a profile in the menu, or an automatic activation, does the same thing:
 - With `expectedOutputDeviceNames`, creates/reuses the Multi-Output Device and sets it as the default output.
 - With `expectedOutputChannelNames`, writes that channel pair as the interface's active stereo output.
 - Enables the IAC Driver when `useIACDriver` is set.
+- Makes sure UAD Console runs with `uadConsoleSession` open (details below).
 
 A step that fails is reported in the menu without blocking the others.
+
+### UAD Console session
+
+On activation, StudioSwitch:
+
+- **does nothing** if UAD Console already shows the profile's session (exact name, ignoring case and the unsaved-changes `*`);
+- **switches** it through UAD Console's own File > Open menu (System Events UI scripting) if another session is open: it waits for the Open panel (it can take several seconds to appear), uses "Go to Folder" to type the path, waits for the panel to close, and confirms the window title shows the new session — about 8 s;
+- **cold start**: if UAD Console isn't running, launches it, waits for its session window (up to 40 s), then switches the same way — about 13 s.
+
+Any step that doesn't happen raises an error shown in orange in the menu, instead of failing silently. Things found on real hardware (UAD Console 1.3.1) that shaped this:
+
+- A running UAD Console ignores requests to open another session file (`NSWorkspace` open, a direct Apple Event `open`); scripted `quit` is refused (-128).
+- Launching UAD Console *with* a session file doesn't load it either: it starts on its default session.
+- The Open panel appears with a delay; typing before it's there sends the keystrokes elsewhere and nothing loads (the cause of earlier failures).
+- `NSAppleScript` must run on the main thread; StudioSwitch runs its scripts there even when activation happens in the background.
+- Switching discards unsaved changes of the current session without asking.
 
 ### Health indicators
 
@@ -96,11 +130,11 @@ After activating a profile (or when opening the menu, for whichever profile matc
 
 The menu used to also show UAD Console, MIDI, USB power and external-disk rows. They were taken out to focus on audio configuration; the code mostly remains but is no longer wired in.
 
-- **UAD Console control**: switching the session of an already-running UAD Console never became reliable. It ignores `NSWorkspace`/Apple Event requests to open another session; the only mechanism that worked was scripting its File > Open menu through System Events, which needs Automation and Accessibility permissions (and Accessibility is invalidated by every ad-hoc rebuild). It worked from a Terminal script and once inside the app, then regressed without a root cause being found. The classes remain under `Sources/StudioSwitchCore/UAD/` and `Health/AppleScriptUADConsoleSession*`, with the findings in their doc comments.
+- **UAD Console row**: the health row and its session picker are gone from the menu; UAD Console is now handled by activation only (see above). The per-profile whitelist of accepted sessions (`expectedUADConsoleSessionNames`) is unused.
 - **USB topology, wattage and power-fault detection**: see `docs/usb-diagnostics.md` and `Scripts/usb-topology.py`. The IOKit disconnect detector, the `system_profiler` power provider and the disk inspector remain in the codebase, unused.
 
 ### Validated on real hardware
 
-Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, and automatic activation after unplugging and replugging the interface.
+Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
 
 Not verified: the IAC Driver step, DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).
