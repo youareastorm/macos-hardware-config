@@ -18,7 +18,13 @@ struct StudioSwitchApp: App {
             loadProfiles: { try ProfileStore().loadProfiles() },
             detector: AudioInterfaceDetector(),
             isAudioDeviceOnline: { CoreAudioStatusProvider().isDeviceOnline(named: $0) },
-            activator: ProfileActivationController(detector: AudioInterfaceDetector(), configurator: AudioMIDIConfigurator(), uadConsole: UADConsoleController()),
+            activator: ProfileActivationController(
+                detector: AudioInterfaceDetector(),
+                configurator: AudioMIDIConfigurator(),
+                uadConsole: UADConsoleController(),
+                uadMixer: UAMixerEngineController(),
+                uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController()
+            ),
             isEnabled: { AutoActivationSetting.isEnabled },
             watcher: CoreAudioDeviceListWatcher()
         )

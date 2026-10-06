@@ -5,6 +5,8 @@ public struct ProfileActivationResult: Equatable {
     public let outputRoutingError: String?
     public let channelPairError: String?
     public let uadConsoleError: String?
+    public var uadOfflineDevicesError: String? = nil
+    public var uadMixerError: String? = nil
 }
 
 public final class ProfileActivationController {
@@ -13,19 +15,25 @@ public final class ProfileActivationController {
     private let multiOutputProvider: MultiOutputDeviceProviding
     private let channelStatus: AudioDeviceStatusProviding
     private let uadConsole: UADConsoleSessionEnsuring?
+    private let uadMixer: UAMixerControlling?
+    private let uadOfflineDevices: UADConsoleOfflineDevicesControlling?
 
     public init(
         detector: DeviceDetecting,
         configurator: AudioMIDIConfiguring,
         multiOutputProvider: MultiOutputDeviceProviding = CoreAudioMultiOutputDeviceProvider(),
         channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
-        uadConsole: UADConsoleSessionEnsuring? = nil
+        uadConsole: UADConsoleSessionEnsuring? = nil,
+        uadMixer: UAMixerControlling? = nil,
+        uadOfflineDevices: UADConsoleOfflineDevicesControlling? = nil
     ) {
         self.detector = detector
         self.configurator = configurator
         self.multiOutputProvider = multiOutputProvider
         self.channelStatus = channelStatus
         self.uadConsole = uadConsole
+        self.uadMixer = uadMixer
+        self.uadOfflineDevices = uadOfflineDevices
     }
 
     public func activate(_ profile: Profile) -> ProfileActivationResult {
@@ -68,7 +76,27 @@ public final class ProfileActivationController {
             uadConsoleError = "\(error)"
         }
 
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError)
+        // After the session: hiding offline units needs UAD Console running, and the mixer
+        // settings go last so a freshly loaded session can't override them.
+        var uadOfflineDevicesError: String?
+        if profile.hideUADOfflineDevices {
+            do {
+                try uadOfflineDevices?.hideOfflineDevices()
+            } catch {
+                uadOfflineDevicesError = "\(error)"
+            }
+        }
+
+        var uadMixerError: String?
+        if profile.expectedClockSource != nil || profile.expectedMonitorLevel != nil {
+            do {
+                try uadMixer?.apply(clockSource: profile.expectedClockSource, monitorLevel: profile.expectedMonitorLevel)
+            } catch {
+                uadMixerError = "\(error)"
+            }
+        }
+
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError)
     }
 
     /// Writes the profile's expected output channel pair (e.g. an Apollo's software-return

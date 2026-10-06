@@ -70,4 +70,39 @@ final class ProfileTests: XCTestCase {
 
         XCTAssertEqual(decoded, profile)
     }
+
+    func test_decodesUADMixerSettingsWhenPresent() throws {
+        let json = """
+        {
+          "name": "Studio",
+          "deviceNameMatch": "Thunderbolt 3 Option Card",
+          "audioDeviceName": "Universal Audio Thunderbolt",
+          "uadConsoleSession": "s",
+          "useIACDriver": false,
+          "daws": [],
+          "expectedClockSource": "Internal",
+          "expectedMonitorLevel": 0,
+          "hideUADOfflineDevices": true
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(Profile.self, from: json)
+
+        XCTAssertEqual(decoded.expectedClockSource, "Internal")
+        XCTAssertEqual(decoded.expectedMonitorLevel, 0)
+        XCTAssertTrue(decoded.hideUADOfflineDevices)
+    }
+
+    func test_uadMixerSettingsDefaultToLeavingThingsAlone() throws {
+        let json = """
+        {"name": "Home", "deviceNameMatch": "Apollo Solo", "audioDeviceName": "Universal Audio Thunderbolt",
+         "uadConsoleSession": "s", "useIACDriver": false, "daws": []}
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(Profile.self, from: json)
+
+        XCTAssertNil(decoded.expectedClockSource)
+        XCTAssertNil(decoded.expectedMonitorLevel)
+        XCTAssertFalse(decoded.hideUADOfflineDevices)
+    }
 }

@@ -80,6 +80,39 @@ private final class MockUADConsole: UADConsoleSessionEnsuring {
     }
 }
 
+/// Shared call log so tests can check the order of the UAD steps.
+private final class StepLog { var steps: [String] = [] }
+
+private final class OrderedUADConsole: UADConsoleSessionEnsuring {
+    let log: StepLog
+    init(log: StepLog) { self.log = log }
+    func ensureSessionOpen(atPath path: String) throws { log.steps.append("session") }
+}
+
+private final class MockUADMixer: UAMixerControlling {
+    var error: Error?
+    var log: StepLog?
+    private(set) var applyCalls: [(clockSource: String?, monitorLevel: Double?)] = []
+    func currentState() throws -> UAMixerState { UAMixerState(clockSource: "Internal", monitorLevel: 0) }
+    func apply(clockSource: String?, monitorLevel: Double?) throws {
+        applyCalls.append((clockSource, monitorLevel))
+        log?.steps.append("mixer")
+        if let error { throw error }
+    }
+}
+
+private final class MockOfflineDevices: UADConsoleOfflineDevicesControlling {
+    var error: Error?
+    var log: StepLog?
+    private(set) var hideCalls = 0
+    func isShowingOfflineDevices() throws -> Bool { false }
+    func hideOfflineDevices() throws {
+        hideCalls += 1
+        log?.steps.append("offline")
+        if let error { throw error }
+    }
+}
+
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
@@ -299,5 +332,95 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertTrue(result.deviceDetected)
         XCTAssertNil(result.deviceConfigError)
         XCTAssertNotNil(result.uadConsoleError)
+    }
+
+    private let studioProfile = Profile(
+        name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt",
+        uadConsoleSession: "s", useIACDriver: false, daws: [],
+        expectedClockSource: "Internal", expectedMonitorLevel: 0, hideUADOfflineDevices: true
+    )
+
+    private func detectedController(mixer: UAMixerControlling? = nil, offline: UADConsoleOfflineDevicesControlling? = nil, console: UADConsoleSessionEnsuring? = nil) -> ProfileActivationController {
+        let detector = MockDetector()
+        detector.matchedName = "Thunderbolt 3 Option Card"
+        return ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: console, uadMixer: mixer, uadOfflineDevices: offline)
+    }
+
+    func test_activate_appliesTheProfilesClockAndMonitorLevel() {
+        let mixer = MockUADMixer()
+
+        let result = detectedController(mixer: mixer).activate(studioProfile)
+
+        XCTAssertEqual(mixer.applyCalls.count, 1)
+        XCTAssertEqual(mixer.applyCalls.first?.clockSource, "Internal")
+        XCTAssertEqual(mixer.applyCalls.first?.monitorLevel, 0)
+        XCTAssertNil(result.uadMixerError)
+    }
+
+    func test_activate_leavesTheMixerAloneWhenTheProfileSetsNeither() {
+        let mixer = MockUADMixer()
+
+        _ = detectedController(mixer: mixer).activate(profile)
+
+        XCTAssertTrue(mixer.applyCalls.isEmpty)
+    }
+
+    func test_activate_reportsMixerErrorWithoutFailingActivation() {
+        let mixer = MockUADMixer()
+        mixer.error = TestError.boom
+
+        let result = detectedController(mixer: mixer).activate(studioProfile)
+
+        XCTAssertTrue(result.deviceDetected)
+        XCTAssertNotNil(result.uadMixerError)
+    }
+
+    func test_activate_hidesOfflineDevicesWhenTheProfileAsks() {
+        let offline = MockOfflineDevices()
+
+        let result = detectedController(offline: offline).activate(studioProfile)
+
+        XCTAssertEqual(offline.hideCalls, 1)
+        XCTAssertNil(result.uadOfflineDevicesError)
+    }
+
+    func test_activate_leavesOfflineDevicesAloneWhenTheProfileDoesNotAsk() {
+        let offline = MockOfflineDevices()
+
+        _ = detectedController(offline: offline).activate(profile)
+
+        XCTAssertEqual(offline.hideCalls, 0)
+    }
+
+    func test_activate_reportsOfflineDevicesErrorWithoutFailingActivation() {
+        let offline = MockOfflineDevices()
+        offline.error = TestError.boom
+
+        let result = detectedController(offline: offline).activate(studioProfile)
+
+        XCTAssertNotNil(result.uadOfflineDevicesError)
+    }
+
+    func test_activate_setsTheMixerAndOfflineDevicesAfterOpeningTheSession() {
+        let log = StepLog()
+        let mixer = MockUADMixer()
+        mixer.log = log
+        let offline = MockOfflineDevices()
+        offline.log = log
+
+        _ = detectedController(mixer: mixer, offline: offline, console: OrderedUADConsole(log: log)).activate(studioProfile)
+
+        XCTAssertEqual(log.steps, ["session", "offline", "mixer"])
+    }
+
+    func test_activate_doesNotTouchTheMixerWhenDeviceNotDetected() {
+        let mixer = MockUADMixer()
+        let offline = MockOfflineDevices()
+        let controller = ProfileActivationController(detector: MockDetector(), configurator: MockConfigurator(), uadMixer: mixer, uadOfflineDevices: offline)
+
+        _ = controller.activate(studioProfile)
+
+        XCTAssertTrue(mixer.applyCalls.isEmpty)
+        XCTAssertEqual(offline.hideCalls, 0)
     }
 }

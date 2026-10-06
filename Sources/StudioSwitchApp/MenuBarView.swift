@@ -23,10 +23,15 @@ struct MenuBarView: View {
     private let activationController = ProfileActivationController(
         detector: AudioInterfaceDetector(),
         configurator: AudioMIDIConfigurator(),
-        uadConsole: UADConsoleController()
+        uadConsole: UADConsoleController(),
+        uadMixer: UAMixerEngineController(),
+        uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController()
     )
     private let dawLauncher = DAWLauncher()
-    private let healthChecker = SystemHealthChecker()
+    private let healthChecker = SystemHealthChecker(
+        uadMixer: UAMixerEngineController(),
+        uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController()
+    )
 
     private let audioDeviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()
     private let audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
@@ -257,13 +262,17 @@ struct MenuBarView: View {
             HStack {
                 rowLabel(result, profile: profile)
                 Spacer()
-                Picker("", selection: binding(forLabel: result.label, profile: profile)) {
-                    ForEach(rowOptions[result.label] ?? [], id: \.self) { option in
-                        Text(option).tag(option)
+                // UAD rows (clock, monitor level, offline units) are fixed on activation and have
+                // no alternatives to pick from.
+                if let options = rowOptions[result.label], !options.isEmpty {
+                    Picker("", selection: binding(forLabel: result.label, profile: profile)) {
+                        ForEach(options, id: \.self) { option in
+                            Text(option).tag(option)
+                        }
                     }
+                    .labelsHidden()
+                    .frame(width: Self.pickerWidth, alignment: .trailing)
                 }
-                .labelsHidden()
-                .frame(width: Self.pickerWidth, alignment: .trailing)
             }
             if let detail = result.info ?? detail(for: result.status) {
                 Text(detail)
@@ -329,7 +338,14 @@ struct MenuBarView: View {
             if let error = result.uadConsoleError {
                 Text("Erreur lancement UAD Console : \(error)").foregroundStyle(.orange)
             }
-            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil && result.uadConsoleError == nil {
+            if let error = result.uadOfflineDevicesError {
+                Text("Erreur cartes hors ligne UAD : \(error)").foregroundStyle(.orange)
+            }
+            if let error = result.uadMixerError {
+                Text("Erreur clock/volume UAD : \(error)").foregroundStyle(.orange)
+            }
+            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil && result.uadConsoleError == nil
+                && result.uadOfflineDevicesError == nil && result.uadMixerError == nil {
                 Text("\(result.profile.name) activé").foregroundStyle(.green)
             }
         }

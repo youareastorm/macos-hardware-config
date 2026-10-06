@@ -36,6 +36,13 @@ public struct Profile: Codable, Equatable {
     /// on, not just the one `uadConsoleSession` opens by default. Empty means fall back to matching
     /// `uadConsoleSession` alone, the original single-session behavior.
     public let expectedUADConsoleSessionNames: [String]
+    /// Clock source the UA Mixer Engine should be on (e.g. `"Internal"`), as listed in its
+    /// `ClockSource` values. `nil` leaves the clock alone.
+    public let expectedClockSource: String?
+    /// UAD Console's MONITOR level in dB (-96…0), set once on activation. `nil` leaves it alone.
+    public let expectedMonitorLevel: Double?
+    /// Uncheck UAD Console's View > Offline Devices so units that aren't connected aren't shown.
+    public let hideUADOfflineDevices: Bool
 
     public init(
         name: String,
@@ -48,7 +55,10 @@ public struct Profile: Codable, Equatable {
         expectedExternalDiskNames: [String] = [],
         expectedOutputDeviceNames: [String] = [],
         expectedOutputChannelNames: [String] = [],
-        expectedUADConsoleSessionNames: [String] = []
+        expectedUADConsoleSessionNames: [String] = [],
+        expectedClockSource: String? = nil,
+        expectedMonitorLevel: Double? = nil,
+        hideUADOfflineDevices: Bool = false
     ) {
         self.name = name
         self.deviceNameMatch = deviceNameMatch
@@ -61,6 +71,9 @@ public struct Profile: Codable, Equatable {
         self.expectedOutputDeviceNames = expectedOutputDeviceNames
         self.expectedOutputChannelNames = expectedOutputChannelNames
         self.expectedUADConsoleSessionNames = expectedUADConsoleSessionNames
+        self.expectedClockSource = expectedClockSource
+        self.expectedMonitorLevel = expectedMonitorLevel
+        self.hideUADOfflineDevices = hideUADOfflineDevices
     }
 
     public init(from decoder: Decoder) throws {
@@ -76,6 +89,9 @@ public struct Profile: Codable, Equatable {
         expectedOutputDeviceNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputDeviceNames) ?? []
         expectedOutputChannelNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputChannelNames) ?? []
         expectedUADConsoleSessionNames = try container.decodeIfPresent([String].self, forKey: .expectedUADConsoleSessionNames) ?? []
+        expectedClockSource = try container.decodeIfPresent(String.self, forKey: .expectedClockSource)
+        expectedMonitorLevel = try container.decodeIfPresent(Double.self, forKey: .expectedMonitorLevel)
+        hideUADOfflineDevices = try container.decodeIfPresent(Bool.self, forKey: .hideUADOfflineDevices) ?? false
     }
 }
 

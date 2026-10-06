@@ -76,6 +76,9 @@ Optional fields:
 - `daws`: the DAWs offered in the menu (`name`, `bundleID`, optional `appPath` and `templatePath` — a project/template file to open the DAW with).
 
 - `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`).
+- `expectedClockSource`: the clock UAD Console should be on (e.g. `"Internal"`), as offered by the UA Mixer Engine for the connected unit. Omit to leave the clock alone.
+- `expectedMonitorLevel`: UAD Console's MONITOR level in dB, from -96 to 0 (e.g. `-35` at home, `0` at the studio). Set once on activation; you can turn it afterwards. Omit to leave it alone.
+- `hideUADOfflineDevices`: `true` to keep UAD Console's View > Offline Devices unchecked, so units that aren't connected (e.g. the studio's Apollo x8 at home) aren't shown after the connected unit's channels.
 
 `expectedUADConsoleSessionNames` and `expectedExternalDiskNames` are still part of the file format but currently unused (see "What was removed").
 
@@ -99,6 +102,7 @@ Clicking a profile in the menu, or an automatic activation, does the same thing:
 - With `expectedOutputChannelNames`, writes that channel pair as the interface's active stereo output.
 - Enables the IAC Driver when `useIACDriver` is set.
 - Makes sure UAD Console runs with `uadConsoleSession` open (details below).
+- Then, with `hideUADOfflineDevices`, unchecks View > Offline Devices if needed, and with `expectedClockSource` / `expectedMonitorLevel`, sets the clock and the monitor level (details below). These come after the session so loading it can't override them.
 
 A step that fails is reported in the menu without blocking the others.
 
@@ -118,6 +122,18 @@ Any step that doesn't happen raises an error shown in orange in the menu, instea
 - `NSAppleScript` must run on the main thread; StudioSwitch runs its scripts there even when activation happens in the background.
 - Switching discards unsaved changes of the current session without asking.
 
+### UAD clock, monitor level and offline units
+
+The clock and the monitor level go through the **UA Mixer Engine**, the background process UAD Console itself drives, on its local control port (127.0.0.1:4710). It answers `get <path>` with JSON (null-terminated) and takes `set <path>/value <v>`. What StudioSwitch uses:
+
+- `/` → `ClockSource` (with the list of `values` the connected unit offers: only `Internal` on an Apollo Solo) and `SampleRate`.
+- `/devices/N` → `DeviceName`, `DeviceOnline` (the studio's Apollo x8 is listed offline at home).
+- `/devices/N/outputs/M` with `IOType` = `Monitor` → `CRMonitorLevel` in dB (-96…0): the MONITOR knob.
+
+Each check or activation uses **one** connection: the engine (11.9.0) crashed (segfault in `Ntwk_Socket_Server::createConnectionObject`) when sent a burst of short-lived connections. It isn't restarted automatically after a crash (its launch agent only runs at login): `launchctl kickstart gui/$(id -u)/com.uaudio.ua_mixer_engine`.
+
+"Offline Devices" is a UAD Console preference, not an engine property. Its state is read from `"Show Offline Devices"` in `~/Library/Preferences/Universal Audio/UAD ConsolePrefs.json` (Console rewrites it within 0.2 s of a click), and it is unchecked by clicking the View menu item with System Events (needs UAD Console running and the Accessibility permission). The menu's own check mark isn't read: it only refreshes when the menu is opened.
+
 ### Health indicators
 
 After activating a profile (or when opening the menu, for whichever profile matches the connected hardware) the menu shows one row per check: a colored dot (green/yellow/red), the check's name, and a dropdown of the real alternatives. Picking one applies it immediately and re-runs the checks; "Actualiser" re-runs them without reactivating.
@@ -125,6 +141,11 @@ After activating a profile (or when opening the menu, for whichever profile matc
 - **Interface audio** — is `audioDeviceName` online, at the expected sample rate, and the default input (and output, when the profile has no separate `expectedOutputDeviceNames`).
 - **Sortie HP** — without `expectedOutputDeviceNames`: is the Mac's built-in output visible (a basic sanity check). With it: is the current default output exactly that device. Clicking the row's name opens Audio MIDI Setup.
 - **Canaux de sortie** — only when `expectedOutputChannelNames` is set: is that channel pair currently active. Dropdown: every consecutive channel pair the device reports.
+- **Clock** — only with `expectedClockSource`: red with the current clock when it differs.
+- **Volume moniteur** — only with `expectedMonitorLevel`: yellow with the current level when it differs (you may have turned it on purpose).
+- **Cartes hors ligne** — only with `hideUADOfflineDevices`: red when View > Offline Devices is checked.
+
+These three rows have no dropdown.
 
 ### What was removed
 
@@ -135,13 +156,13 @@ The menu used to also show UAD Console, MIDI, USB power and external-disk rows. 
 
 ### Next try (studio)
 
-- **UAD Console clock must switch to `Internal`** in the Studio configuration. Found so far (2026-10-06, read-only, not yet applied by the app):
-  - The clock is not stored in the `.uadmix` session file (no clock entry in `OCTO EMPTY.uadmix`), so switching session won't set it.
-  - CoreAudio exposes it on `Universal Audio Thunderbolt`: `kAudioDevicePropertyClockSource`, reported as settable, with sources `0 S/PDIF`, `1 ADAT`, `2 Word Clock`, `4 Internal` (it read `Internal` at the time of the check).
-  - To verify: that writing `4` through CoreAudio actually changes the clock shown in UAD Console. If it does, this would be a new optional profile field (e.g. `clockSource: "Internal"`) applied on activation.
+- Check on the Apollo x8 that setting the clock through the engine works: on an Apollo Solo, `Internal` is the only clock offered, so a clock *change* has not been seen yet. The exact `set` value format for a string (`Internal`) is unverified.
+- Check that the monitor goes to 0 dB on plug-in.
 
 ### Validated on real hardware
 
 Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
 
-Not verified: the IAC Driver step, DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).
+Also verified on the Apollo Solo: reading the clock and monitor level from the UA Mixer Engine, setting the monitor level (-28 → -35 dB, -34 → -35 dB, shown on Console's knob), and unchecking Offline Devices (checked → unchecked, confirmed in `ConsolePrefs.json`).
+
+Not verified: changing the clock source (see "Next try"), the IAC Driver step, DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).

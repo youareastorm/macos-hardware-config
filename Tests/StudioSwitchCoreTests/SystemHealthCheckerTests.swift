@@ -20,6 +20,30 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { availableChannelPairs[deviceName] ?? [] }
 }
 
+private final class StubUADMixer: UAMixerControlling {
+    var state = UAMixerState(clockSource: "Internal", monitorLevel: -35)
+    var error: Error?
+    private(set) var reads = 0
+    func currentState() throws -> UAMixerState {
+        reads += 1
+        if let error { throw error }
+        return state
+    }
+    func apply(clockSource: String?, monitorLevel: Double?) throws {}
+}
+
+private final class StubOfflineDevices: UADConsoleOfflineDevicesControlling {
+    var showing = false
+    var error: Error?
+    func isShowingOfflineDevices() throws -> Bool {
+        if let error { throw error }
+        return showing
+    }
+    func hideOfflineDevices() throws {}
+}
+
+private enum StubError: Error { case unreachable }
+
 final class SystemHealthCheckerTests: XCTestCase {
     private let profile = Profile(
         name: "Home",
@@ -225,5 +249,85 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profileWithChannels)
 
         XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .error("Impossible de lire les canaux de Universal Audio Thunderbolt"))
+    }
+
+    private let uadProfile = Profile(
+        name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+        uadConsoleSession: "s", useIACDriver: false, daws: [],
+        expectedClockSource: "Internal", expectedMonitorLevel: -35, hideUADOfflineDevices: true
+    )
+
+    private func status(_ label: String, mixer: StubUADMixer = StubUADMixer(), offline: StubOfflineDevices = StubOfflineDevices(), profile: Profile? = nil) -> HealthStatus? {
+        let checker = SystemHealthChecker(audioStatus: MockAudioDeviceStatusProvider(), uadMixer: mixer, uadOfflineDevices: offline)
+        return checker.check(for: profile ?? uadProfile).first(where: { $0.label == label })?.status
+    }
+
+    func test_clock_okWhenOnTheExpectedSource() {
+        XCTAssertEqual(status("Clock"), .ok)
+    }
+
+    func test_clock_errorsWithTheCurrentSourceWhenDifferent() {
+        let mixer = StubUADMixer()
+        mixer.state = UAMixerState(clockSource: "ADAT", monitorLevel: -35)
+
+        XCTAssertEqual(status("Clock", mixer: mixer), .error("Actuellement : ADAT"))
+    }
+
+    func test_monitorLevel_okWhenAtTheExpectedLevel() {
+        XCTAssertEqual(status("Volume moniteur"), .ok)
+    }
+
+    func test_monitorLevel_warnsWithTheCurrentLevelWhenDifferent() {
+        let mixer = StubUADMixer()
+        mixer.state = UAMixerState(clockSource: "Internal", monitorLevel: -28)
+
+        XCTAssertEqual(status("Volume moniteur", mixer: mixer), .warning("-28 dB au lieu de -35 dB"))
+    }
+
+    func test_mixerRows_errorWhenTheEngineCannotBeRead() {
+        let mixer = StubUADMixer()
+        mixer.error = StubError.unreachable
+
+        XCTAssertEqual(status("Clock", mixer: mixer), .error("Moteur UA illisible : unreachable"))
+        XCTAssertEqual(status("Volume moniteur", mixer: mixer), .error("Moteur UA illisible : unreachable"))
+    }
+
+    func test_mixerRows_readTheEngineOnlyOnce() {
+        let mixer = StubUADMixer()
+        let checker = SystemHealthChecker(audioStatus: MockAudioDeviceStatusProvider(), uadMixer: mixer, uadOfflineDevices: StubOfflineDevices())
+
+        _ = checker.check(for: uadProfile)
+
+        XCTAssertEqual(mixer.reads, 1)
+    }
+
+    func test_uadRows_absentWhenTheProfileSetsNothing() {
+        let mixer = StubUADMixer()
+        let checker = SystemHealthChecker(audioStatus: MockAudioDeviceStatusProvider(), uadMixer: mixer, uadOfflineDevices: StubOfflineDevices())
+
+        let labels = checker.check(for: profile).map(\.label)
+
+        XCTAssertFalse(labels.contains("Clock"))
+        XCTAssertFalse(labels.contains("Volume moniteur"))
+        XCTAssertFalse(labels.contains("Cartes hors ligne"))
+        XCTAssertEqual(mixer.reads, 0)
+    }
+
+    func test_offlineDevices_okWhenHidden() {
+        XCTAssertEqual(status("Cartes hors ligne"), .ok)
+    }
+
+    func test_offlineDevices_errorsWhenShown() {
+        let offline = StubOfflineDevices()
+        offline.showing = true
+
+        XCTAssertEqual(status("Cartes hors ligne", offline: offline), .error("Affichées (View > Offline Devices coché)"))
+    }
+
+    func test_offlineDevices_warnsWhenUnreadable() {
+        let offline = StubOfflineDevices()
+        offline.error = StubError.unreachable
+
+        XCTAssertEqual(status("Cartes hors ligne", offline: offline), .warning("Préférence de UAD Console illisible"))
     }
 }
