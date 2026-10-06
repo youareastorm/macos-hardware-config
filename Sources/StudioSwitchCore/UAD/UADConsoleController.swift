@@ -4,10 +4,11 @@ public protocol UADSessionOpening {
     func openSession(atPath path: String) throws
 }
 
-public protocol UADConsoleLaunching {
-    /// Starts UAD Console if it isn't running yet, leaving whatever session it opens by itself.
-    /// Does nothing when it's already running.
-    func launchIfNotRunning() throws
+public protocol UADConsoleSessionEnsuring {
+    /// Makes sure UAD Console is running with the given session open: launches it with that
+    /// session when it isn't running, loads the session when a different one is open, and does
+    /// nothing when it's already the open one.
+    func ensureSessionOpen(atPath path: String) throws
 }
 
 public enum UADConsoleControllerError: Error, Equatable {
@@ -15,7 +16,7 @@ public enum UADConsoleControllerError: Error, Equatable {
     case consoleAppNotFound(String)
 }
 
-public final class UADConsoleController: UADSessionOpening, UADConsoleLaunching {
+public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEnsuring {
     public static let defaultConsoleAppPath = "/Applications/Universal Audio/UAD Console.app"
     public static let defaultConsoleBundleID = "com.uaudio.console3"
 
@@ -25,6 +26,7 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleLaunching 
     private let consoleBundleID: String
     private let runningChecker: RunningApplicationChecking
     private let sessionLoader: UADConsoleSessionLoading
+    private let sessionInspector: UADConsoleSessionInspecting
 
     public init(
         appLauncher: AppLaunching = WorkspaceAppLauncher(),
@@ -32,7 +34,8 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleLaunching 
         consoleAppPath: String = UADConsoleController.defaultConsoleAppPath,
         consoleBundleID: String = UADConsoleController.defaultConsoleBundleID,
         runningChecker: RunningApplicationChecking = WorkspaceRunningApplicationChecker(),
-        sessionLoader: UADConsoleSessionLoading = AppleScriptUADConsoleSessionLoader()
+        sessionLoader: UADConsoleSessionLoading = AppleScriptUADConsoleSessionLoader(),
+        sessionInspector: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
     ) {
         self.appLauncher = appLauncher
         self.fileManager = fileManager
@@ -40,14 +43,29 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleLaunching 
         self.consoleBundleID = consoleBundleID
         self.runningChecker = runningChecker
         self.sessionLoader = sessionLoader
+        self.sessionInspector = sessionInspector
     }
 
-    public func launchIfNotRunning() throws {
-        guard !runningChecker.isRunning(bundleID: consoleBundleID) else { return }
-        guard fileManager.fileExists(atPath: consoleAppPath) else {
-            throw UADConsoleControllerError.consoleAppNotFound(consoleAppPath)
+    public func ensureSessionOpen(atPath path: String) throws {
+        if runningChecker.isRunning(bundleID: consoleBundleID),
+           let openTitle = sessionInspector.currentSessionName(),
+           Self.sessionName(fromWindowTitle: openTitle).caseInsensitiveCompare(Self.sessionName(fromPath: path)) == .orderedSame {
+            return
         }
-        try appLauncher.launchApplication(at: URL(fileURLWithPath: consoleAppPath))
+        try openSession(atPath: path)
+    }
+
+    /// "UAD Console: OCTO EMPTY*" → "OCTO EMPTY" (the trailing asterisk marks unsaved changes).
+    static func sessionName(fromWindowTitle title: String) -> String {
+        var name = title.trimmingCharacters(in: .whitespaces)
+        if name.hasPrefix("UAD Console:") { name = String(name.dropFirst("UAD Console:".count)) }
+        name = name.trimmingCharacters(in: .whitespaces)
+        if name.hasSuffix("*") { name = String(name.dropLast()).trimmingCharacters(in: .whitespaces) }
+        return name
+    }
+
+    static func sessionName(fromPath path: String) -> String {
+        ((path as NSString).lastPathComponent as NSString).deletingPathExtension
     }
 
     public func openSession(atPath path: String) throws {

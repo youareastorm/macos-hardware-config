@@ -12,20 +12,20 @@ public final class ProfileActivationController {
     private let configurator: AudioMIDIConfiguring
     private let multiOutputProvider: MultiOutputDeviceProviding
     private let channelStatus: AudioDeviceStatusProviding
-    private let uadConsoleLauncher: UADConsoleLaunching?
+    private let uadConsole: UADConsoleSessionEnsuring?
 
     public init(
         detector: DeviceDetecting,
         configurator: AudioMIDIConfiguring,
         multiOutputProvider: MultiOutputDeviceProviding = CoreAudioMultiOutputDeviceProvider(),
         channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
-        uadConsoleLauncher: UADConsoleLaunching? = nil
+        uadConsole: UADConsoleSessionEnsuring? = nil
     ) {
         self.detector = detector
         self.configurator = configurator
         self.multiOutputProvider = multiOutputProvider
         self.channelStatus = channelStatus
-        self.uadConsoleLauncher = uadConsoleLauncher
+        self.uadConsole = uadConsole
     }
 
     public func activate(_ profile: Profile) -> ProfileActivationResult {
@@ -63,7 +63,7 @@ public final class ProfileActivationController {
 
         var uadConsoleError: String?
         do {
-            try uadConsoleLauncher?.launchIfNotRunning()
+            try uadConsole?.ensureSessionOpen(atPath: profile.uadConsoleSession)
         } catch {
             uadConsoleError = "\(error)"
         }

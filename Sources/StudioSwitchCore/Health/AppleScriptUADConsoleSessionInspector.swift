@@ -37,11 +37,9 @@ public final class AppleScriptUADConsoleSessionInspector: UADConsoleSessionInspe
             end tell
         end tell
         """
-        guard let script = NSAppleScript(source: source) else { return nil }
-        var errorInfo: NSDictionary?
-        let result = script.executeAndReturnError(&errorInfo)
-        guard errorInfo == nil else { return nil }
-        let value = result.stringValue ?? ""
+        let (result, error) = runAppleScriptOnMainThread(source)
+        guard error == nil else { return nil }
+        let value = result?.stringValue ?? ""
         return value.isEmpty ? nil : value
     }
 }

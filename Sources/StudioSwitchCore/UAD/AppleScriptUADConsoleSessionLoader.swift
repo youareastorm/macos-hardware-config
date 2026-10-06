@@ -40,37 +40,50 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
     private static let openPanelTitle = "Choose a session file to open:"
 
     public func loadSession(atPath path: String) throws {
+        let sessionName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
         let source = """
         tell application "System Events"
             tell process "\(Self.escaped(processName))"
                 set frontmost to true
                 delay 0.5
                 click menu item "Open..." of menu "File" of menu bar 1
-                delay 0.6
-                keystroke "g" using {command down, shift down}
-                delay 0.6
-                keystroke "\(Self.escaped(path))"
-                delay 0.3
-                key code 36
-                delay 1
-                key code 36
-                repeat 30 times
-                    if not (exists window "\(Self.openPanelTitle)") then exit repeat
-                    delay 0.2
+
+                set waited to 0
+                repeat until (exists window "\(Self.openPanelTitle)")
+                    delay 0.25
+                    set waited to waited + 0.25
+                    if waited > 20 then error "le panneau d'ouverture ne s'est pas affiché"
                 end repeat
-                if exists window "\(Self.openPanelTitle)" then error "le panneau d'ouverture ne s'est pas fermé — le chargement a probablement échoué"
+                delay 0.8
+
+                keystroke "g" using {command down, shift down}
+                delay 1.2
+                keystroke "\(Self.escaped(path))"
+                delay 0.5
+                key code 36
+                delay 1.5
+                key code 36
+
+                set waited to 0
+                repeat while (exists window "\(Self.openPanelTitle)")
+                    delay 0.25
+                    set waited to waited + 0.25
+                    if waited > 15 then error "le panneau d'ouverture ne s'est pas fermé"
+                end repeat
+
+                set waited to 0
+                repeat until ((count of (windows whose name begins with "UAD Console:" and name contains "\(Self.escaped(sessionName))")) > 0)
+                    delay 0.25
+                    set waited to waited + 0.25
+                    if waited > 20 then error "la session \(Self.escaped(sessionName)) ne s'est pas chargée"
+                end repeat
             end tell
         end tell
         """
 
-        guard let script = NSAppleScript(source: source) else {
-            throw UADConsoleSessionLoaderError.appleScriptFailed("could not parse AppleScript source")
-        }
-
-        var errorInfo: NSDictionary?
-        script.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            throw UADConsoleSessionLoaderError.appleScriptFailed("\(errorInfo)")
+        let (_, error) = runAppleScriptOnMainThread(source)
+        if let error {
+            throw UADConsoleSessionLoaderError.appleScriptFailed("\(error)")
         }
     }
 

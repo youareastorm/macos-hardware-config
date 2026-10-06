@@ -23,7 +23,7 @@ struct MenuBarView: View {
     private let activationController = ProfileActivationController(
         detector: AudioInterfaceDetector(),
         configurator: AudioMIDIConfigurator(),
-        uadConsoleLauncher: UADConsoleController()
+        uadConsole: UADConsoleController()
     )
     private let dawLauncher = DAWLauncher()
     private let healthChecker = SystemHealthChecker()

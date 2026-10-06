@@ -26,6 +26,11 @@ private final class MockSessionLoader: UADConsoleSessionLoading {
     }
 }
 
+private final class MockSessionInspector: UADConsoleSessionInspecting {
+    var title: String?
+    func currentSessionName() -> String? { title }
+}
+
 final class UADConsoleControllerTests: XCTestCase {
     private var tempDirectory: URL!
 
@@ -128,41 +133,85 @@ final class UADConsoleControllerTests: XCTestCase {
         }
     }
 
-    func test_launchIfNotRunning_launchesTheConsoleAppWhenItIsNotRunning() throws {
-        let consoleAppURL = tempDirectory.appendingPathComponent("UAD Console.app")
-        try FileManager.default.createDirectory(at: consoleAppURL, withIntermediateDirectories: true)
-        let launcher = MockAppLauncher()
-        let controller = UADConsoleController(appLauncher: launcher, consoleAppPath: consoleAppURL.path, runningChecker: MockRunningApplicationChecker())
+    // MARK: - ensureSessionOpen
 
-        try controller.launchIfNotRunning()
-
-        XCTAssertEqual(launcher.launchedAppURLs.map(\.path), [consoleAppURL.path])
-    }
-
-    func test_launchIfNotRunning_doesNothingWhenTheConsoleIsAlreadyRunning() throws {
+    private func makeEnsureFixture(running: Bool, windowTitle: String?) throws -> (controller: UADConsoleController, launcher: MockAppLauncher, loader: MockSessionLoader, sessionURL: URL) {
+        let sessionURL = tempDirectory.appendingPathComponent("OCTO EMPTY.uadmix")
+        try Data().write(to: sessionURL)
         let consoleAppURL = tempDirectory.appendingPathComponent("UAD Console.app")
         try FileManager.default.createDirectory(at: consoleAppURL, withIntermediateDirectories: true)
         let launcher = MockAppLauncher()
         let runningChecker = MockRunningApplicationChecker()
-        runningChecker.runningBundleIDs = [UADConsoleController.defaultConsoleBundleID]
-        let controller = UADConsoleController(appLauncher: launcher, consoleAppPath: consoleAppURL.path, runningChecker: runningChecker)
-
-        try controller.launchIfNotRunning()
-
-        XCTAssertTrue(launcher.launchedAppURLs.isEmpty)
+        if running { runningChecker.runningBundleIDs = [UADConsoleController.defaultConsoleBundleID] }
+        let loader = MockSessionLoader()
+        let inspector = MockSessionInspector()
+        inspector.title = windowTitle
+        let controller = UADConsoleController(
+            appLauncher: launcher,
+            consoleAppPath: consoleAppURL.path,
+            runningChecker: runningChecker,
+            sessionLoader: loader,
+            sessionInspector: inspector
+        )
+        return (controller, launcher, loader, sessionURL)
     }
 
-    func test_launchIfNotRunning_throwsWhenTheConsoleAppIsMissing() {
-        let controller = UADConsoleController(
-            appLauncher: MockAppLauncher(),
-            consoleAppPath: tempDirectory.appendingPathComponent("NoConsole.app").path,
-            runningChecker: MockRunningApplicationChecker()
-        )
+    func test_ensureSessionOpen_launchesTheConsoleWithTheSessionWhenItIsNotRunning() throws {
+        let f = try makeEnsureFixture(running: false, windowTitle: nil)
 
-        XCTAssertThrowsError(try controller.launchIfNotRunning()) { error in
-            guard case UADConsoleControllerError.consoleAppNotFound = error else {
-                return XCTFail("expected consoleAppNotFound, got \(error)")
-            }
-        }
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertEqual(f.launcher.openedFileURL, f.sessionURL)
+        XCTAssertTrue(f.loader.loadedPaths.isEmpty)
+    }
+
+    func test_ensureSessionOpen_doesNothingWhenTheSessionIsAlreadyOpen() throws {
+        let f = try makeEnsureFixture(running: true, windowTitle: "UAD Console: OCTO EMPTY")
+
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertTrue(f.loader.loadedPaths.isEmpty)
+        XCTAssertNil(f.launcher.openedFileURL)
+    }
+
+    func test_ensureSessionOpen_ignoresCaseAndTheUnsavedChangesAsterisk() throws {
+        let f = try makeEnsureFixture(running: true, windowTitle: "UAD Console: octo empty*")
+
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertTrue(f.loader.loadedPaths.isEmpty)
+    }
+
+    func test_ensureSessionOpen_loadsTheSessionWhenADifferentOneIsOpen() throws {
+        let f = try makeEnsureFixture(running: true, windowTitle: "UAD Console: empty home*")
+
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertEqual(f.loader.loadedPaths, [f.sessionURL.path])
+    }
+
+    func test_ensureSessionOpen_doesNotConfuseASessionWhoseNameContainsTheExpectedOne() throws {
+        let sessionURL = tempDirectory.appendingPathComponent("EMPTY.uadmix")
+        try Data().write(to: sessionURL)
+        let consoleAppURL = tempDirectory.appendingPathComponent("UAD Console.app")
+        try FileManager.default.createDirectory(at: consoleAppURL, withIntermediateDirectories: true)
+        let runningChecker = MockRunningApplicationChecker()
+        runningChecker.runningBundleIDs = [UADConsoleController.defaultConsoleBundleID]
+        let loader = MockSessionLoader()
+        let inspector = MockSessionInspector()
+        inspector.title = "UAD Console: OCTO EMPTY"
+        let controller = UADConsoleController(appLauncher: MockAppLauncher(), consoleAppPath: consoleAppURL.path, runningChecker: runningChecker, sessionLoader: loader, sessionInspector: inspector)
+
+        try controller.ensureSessionOpen(atPath: sessionURL.path)
+
+        XCTAssertEqual(loader.loadedPaths, [sessionURL.path])
+    }
+
+    func test_ensureSessionOpen_loadsTheSessionWhenTheCurrentOneCannotBeRead() throws {
+        let f = try makeEnsureFixture(running: true, windowTitle: nil)
+
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertEqual(f.loader.loadedPaths, [f.sessionURL.path])
     }
 }

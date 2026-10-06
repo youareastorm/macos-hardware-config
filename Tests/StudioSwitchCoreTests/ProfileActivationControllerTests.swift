@@ -71,11 +71,11 @@ private final class MockMultiOutputDeviceProvider: MultiOutputDeviceProviding {
     }
 }
 
-private final class MockUADConsoleLauncher: UADConsoleLaunching {
+private final class MockUADConsole: UADConsoleSessionEnsuring {
     var error: Error?
-    private(set) var launchCallCount = 0
-    func launchIfNotRunning() throws {
-        launchCallCount += 1
+    private(set) var ensuredPaths: [String] = []
+    func ensureSessionOpen(atPath path: String) throws {
+        ensuredPaths.append(path)
         if let error { throw error }
     }
 }
@@ -266,33 +266,33 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertNotNil(result.channelPairError)
     }
 
-    func test_activate_launchesUADConsoleWhenDeviceDetected() {
+    func test_activate_ensuresTheProfilesUADConsoleSessionWhenDeviceDetected() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
-        let launcher = MockUADConsoleLauncher()
-        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+        let uadConsole = MockUADConsole()
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: uadConsole)
 
         let result = controller.activate(profile)
 
-        XCTAssertEqual(launcher.launchCallCount, 1)
+        XCTAssertEqual(uadConsole.ensuredPaths, ["s"])
         XCTAssertNil(result.uadConsoleError)
     }
 
-    func test_activate_doesNotLaunchUADConsoleWhenDeviceNotDetected() {
-        let launcher = MockUADConsoleLauncher()
-        let controller = ProfileActivationController(detector: MockDetector(), configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+    func test_activate_doesNotTouchUADConsoleWhenDeviceNotDetected() {
+        let uadConsole = MockUADConsole()
+        let controller = ProfileActivationController(detector: MockDetector(), configurator: MockConfigurator(), uadConsole: uadConsole)
 
         _ = controller.activate(profile)
 
-        XCTAssertEqual(launcher.launchCallCount, 0)
+        XCTAssertTrue(uadConsole.ensuredPaths.isEmpty)
     }
 
-    func test_activate_reportsUADConsoleLaunchErrorWithoutFailingActivation() {
+    func test_activate_reportsUADConsoleErrorWithoutFailingActivation() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
-        let launcher = MockUADConsoleLauncher()
-        launcher.error = TestError.boom
-        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+        let uadConsole = MockUADConsole()
+        uadConsole.error = TestError.boom
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: uadConsole)
 
         let result = controller.activate(profile)
 
