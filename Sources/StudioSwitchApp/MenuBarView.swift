@@ -16,6 +16,7 @@ struct MenuBarView: View {
     @State private var selections: [String: String] = [:]
     @State private var channelPairs: [ChannelPair] = []
     @State private var actionMessage: String?
+    @AppStorage(AutoActivationSetting.key) private var autoActivationEnabled = true
 
     private let profileStore = ProfileStore()
     private let detector: DeviceDetecting = AudioInterfaceDetector()
@@ -71,6 +72,8 @@ struct MenuBarView: View {
             }
 
             Divider()
+
+            Toggle("Bascule auto au branchement", isOn: $autoActivationEnabled)
 
             if showingNewProfileForm {
                 NewProfileFormView(
