@@ -133,6 +133,13 @@ The menu used to also show UAD Console, MIDI, USB power and external-disk rows. 
 - **UAD Console row**: the health row and its session picker are gone from the menu; UAD Console is now handled by activation only (see above). The per-profile whitelist of accepted sessions (`expectedUADConsoleSessionNames`) is unused.
 - **USB topology, wattage and power-fault detection**: see `docs/usb-diagnostics.md` and `Scripts/usb-topology.py`. The IOKit disconnect detector, the `system_profiler` power provider and the disk inspector remain in the codebase, unused.
 
+### Next try (studio)
+
+- **UAD Console clock must switch to `Internal`** in the Studio configuration. Found so far (2026-10-06, read-only, not yet applied by the app):
+  - The clock is not stored in the `.uadmix` session file (no clock entry in `OCTO EMPTY.uadmix`), so switching session won't set it.
+  - CoreAudio exposes it on `Universal Audio Thunderbolt`: `kAudioDevicePropertyClockSource`, reported as settable, with sources `0 S/PDIF`, `1 ADAT`, `2 Word Clock`, `4 Internal` (it read `Internal` at the time of the check).
+  - To verify: that writing `4` through CoreAudio actually changes the clock shown in UAD Console. If it does, this would be a new optional profile field (e.g. `clockSource: "Internal"`) applied on activation.
+
 ### Validated on real hardware
 
 Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
