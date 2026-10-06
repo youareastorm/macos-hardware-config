@@ -4,6 +4,7 @@ public struct ProfileActivationResult: Equatable {
     public let deviceConfigError: String?
     public let outputRoutingError: String?
     public let channelPairError: String?
+    public let uadConsoleError: String?
 }
 
 public final class ProfileActivationController {
@@ -11,22 +12,25 @@ public final class ProfileActivationController {
     private let configurator: AudioMIDIConfiguring
     private let multiOutputProvider: MultiOutputDeviceProviding
     private let channelStatus: AudioDeviceStatusProviding
+    private let uadConsoleLauncher: UADConsoleLaunching?
 
     public init(
         detector: DeviceDetecting,
         configurator: AudioMIDIConfiguring,
         multiOutputProvider: MultiOutputDeviceProviding = CoreAudioMultiOutputDeviceProvider(),
-        channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
+        channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
+        uadConsoleLauncher: UADConsoleLaunching? = nil
     ) {
         self.detector = detector
         self.configurator = configurator
         self.multiOutputProvider = multiOutputProvider
         self.channelStatus = channelStatus
+        self.uadConsoleLauncher = uadConsoleLauncher
     }
 
     public func activate(_ profile: Profile) -> ProfileActivationResult {
         guard detector.matchingDeviceName(for: profile) != nil else {
-            return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, outputRoutingError: nil, channelPairError: nil)
+            return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, outputRoutingError: nil, channelPairError: nil, uadConsoleError: nil)
         }
 
         var deviceConfigError: String?
@@ -57,7 +61,14 @@ public final class ProfileActivationController {
 
         let channelPairError = applyOutputChannelPair(for: profile)
 
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError)
+        var uadConsoleError: String?
+        do {
+            try uadConsoleLauncher?.launchIfNotRunning()
+        } catch {
+            uadConsoleError = "\(error)"
+        }
+
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError)
     }
 
     /// Writes the profile's expected output channel pair (e.g. an Apollo's software-return

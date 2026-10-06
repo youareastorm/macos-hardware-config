@@ -13,7 +13,7 @@ private final class MockActivator: ProfileActivating {
     var deviceConfigError: String?
     func activate(_ profile: Profile) -> ProfileActivationResult {
         activated.append(profile.name)
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: nil, channelPairError: nil)
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: nil, channelPairError: nil, uadConsoleError: nil)
     }
 }
 

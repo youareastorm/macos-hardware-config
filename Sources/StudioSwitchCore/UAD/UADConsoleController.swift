@@ -4,12 +4,18 @@ public protocol UADSessionOpening {
     func openSession(atPath path: String) throws
 }
 
+public protocol UADConsoleLaunching {
+    /// Starts UAD Console if it isn't running yet, leaving whatever session it opens by itself.
+    /// Does nothing when it's already running.
+    func launchIfNotRunning() throws
+}
+
 public enum UADConsoleControllerError: Error, Equatable {
     case sessionFileNotFound(String)
     case consoleAppNotFound(String)
 }
 
-public final class UADConsoleController: UADSessionOpening {
+public final class UADConsoleController: UADSessionOpening, UADConsoleLaunching {
     public static let defaultConsoleAppPath = "/Applications/Universal Audio/UAD Console.app"
     public static let defaultConsoleBundleID = "com.uaudio.console3"
 
@@ -34,6 +40,14 @@ public final class UADConsoleController: UADSessionOpening {
         self.consoleBundleID = consoleBundleID
         self.runningChecker = runningChecker
         self.sessionLoader = sessionLoader
+    }
+
+    public func launchIfNotRunning() throws {
+        guard !runningChecker.isRunning(bundleID: consoleBundleID) else { return }
+        guard fileManager.fileExists(atPath: consoleAppPath) else {
+            throw UADConsoleControllerError.consoleAppNotFound(consoleAppPath)
+        }
+        try appLauncher.launchApplication(at: URL(fileURLWithPath: consoleAppPath))
     }
 
     public func openSession(atPath path: String) throws {

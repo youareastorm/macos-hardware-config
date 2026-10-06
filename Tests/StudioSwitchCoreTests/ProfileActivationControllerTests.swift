@@ -71,6 +71,15 @@ private final class MockMultiOutputDeviceProvider: MultiOutputDeviceProviding {
     }
 }
 
+private final class MockUADConsoleLauncher: UADConsoleLaunching {
+    var error: Error?
+    private(set) var launchCallCount = 0
+    func launchIfNotRunning() throws {
+        launchCallCount += 1
+        if let error { throw error }
+    }
+}
+
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
@@ -255,5 +264,40 @@ final class ProfileActivationControllerTests: XCTestCase {
 
         XCTAssertTrue(result.deviceDetected)
         XCTAssertNotNil(result.channelPairError)
+    }
+
+    func test_activate_launchesUADConsoleWhenDeviceDetected() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let launcher = MockUADConsoleLauncher()
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+
+        let result = controller.activate(profile)
+
+        XCTAssertEqual(launcher.launchCallCount, 1)
+        XCTAssertNil(result.uadConsoleError)
+    }
+
+    func test_activate_doesNotLaunchUADConsoleWhenDeviceNotDetected() {
+        let launcher = MockUADConsoleLauncher()
+        let controller = ProfileActivationController(detector: MockDetector(), configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+
+        _ = controller.activate(profile)
+
+        XCTAssertEqual(launcher.launchCallCount, 0)
+    }
+
+    func test_activate_reportsUADConsoleLaunchErrorWithoutFailingActivation() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let launcher = MockUADConsoleLauncher()
+        launcher.error = TestError.boom
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsoleLauncher: launcher)
+
+        let result = controller.activate(profile)
+
+        XCTAssertTrue(result.deviceDetected)
+        XCTAssertNil(result.deviceConfigError)
+        XCTAssertNotNil(result.uadConsoleError)
     }
 }

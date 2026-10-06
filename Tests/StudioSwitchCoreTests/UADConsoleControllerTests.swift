@@ -4,7 +4,8 @@ import XCTest
 private final class MockAppLauncher: AppLaunching {
     private(set) var openedFileURL: URL?
     private(set) var openedAppURL: URL?
-    func launchApplication(at appURL: URL) throws {}
+    private(set) var launchedAppURLs: [URL] = []
+    func launchApplication(at appURL: URL) throws { launchedAppURLs.append(appURL) }
     func open(fileURL: URL, withApplicationAt appURL: URL) throws {
         openedFileURL = fileURL
         openedAppURL = appURL
@@ -124,6 +125,44 @@ final class UADConsoleControllerTests: XCTestCase {
 
         XCTAssertThrowsError(try controller.openSession(atPath: sessionURL.path)) { error in
             XCTAssertEqual(error as? UADConsoleSessionLoaderError, .appleScriptFailed("boom"))
+        }
+    }
+
+    func test_launchIfNotRunning_launchesTheConsoleAppWhenItIsNotRunning() throws {
+        let consoleAppURL = tempDirectory.appendingPathComponent("UAD Console.app")
+        try FileManager.default.createDirectory(at: consoleAppURL, withIntermediateDirectories: true)
+        let launcher = MockAppLauncher()
+        let controller = UADConsoleController(appLauncher: launcher, consoleAppPath: consoleAppURL.path, runningChecker: MockRunningApplicationChecker())
+
+        try controller.launchIfNotRunning()
+
+        XCTAssertEqual(launcher.launchedAppURLs.map(\.path), [consoleAppURL.path])
+    }
+
+    func test_launchIfNotRunning_doesNothingWhenTheConsoleIsAlreadyRunning() throws {
+        let consoleAppURL = tempDirectory.appendingPathComponent("UAD Console.app")
+        try FileManager.default.createDirectory(at: consoleAppURL, withIntermediateDirectories: true)
+        let launcher = MockAppLauncher()
+        let runningChecker = MockRunningApplicationChecker()
+        runningChecker.runningBundleIDs = [UADConsoleController.defaultConsoleBundleID]
+        let controller = UADConsoleController(appLauncher: launcher, consoleAppPath: consoleAppURL.path, runningChecker: runningChecker)
+
+        try controller.launchIfNotRunning()
+
+        XCTAssertTrue(launcher.launchedAppURLs.isEmpty)
+    }
+
+    func test_launchIfNotRunning_throwsWhenTheConsoleAppIsMissing() {
+        let controller = UADConsoleController(
+            appLauncher: MockAppLauncher(),
+            consoleAppPath: tempDirectory.appendingPathComponent("NoConsole.app").path,
+            runningChecker: MockRunningApplicationChecker()
+        )
+
+        XCTAssertThrowsError(try controller.launchIfNotRunning()) { error in
+            guard case UADConsoleControllerError.consoleAppNotFound = error else {
+                return XCTFail("expected consoleAppNotFound, got \(error)")
+            }
         }
     }
 }

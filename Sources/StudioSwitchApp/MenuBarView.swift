@@ -22,7 +22,8 @@ struct MenuBarView: View {
     private let detector: DeviceDetecting = AudioInterfaceDetector()
     private let activationController = ProfileActivationController(
         detector: AudioInterfaceDetector(),
-        configurator: AudioMIDIConfigurator()
+        configurator: AudioMIDIConfigurator(),
+        uadConsoleLauncher: UADConsoleController()
     )
     private let dawLauncher = DAWLauncher()
     private let healthChecker = SystemHealthChecker()
@@ -325,7 +326,10 @@ struct MenuBarView: View {
             if let error = result.channelPairError {
                 Text("Erreur canaux de sortie : \(error)").foregroundStyle(.orange)
             }
-            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil {
+            if let error = result.uadConsoleError {
+                Text("Erreur lancement UAD Console : \(error)").foregroundStyle(.orange)
+            }
+            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil && result.uadConsoleError == nil {
                 Text("\(result.profile.name) activé").foregroundStyle(.green)
             }
         }
