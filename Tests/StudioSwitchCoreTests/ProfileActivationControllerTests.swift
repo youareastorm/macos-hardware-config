@@ -60,16 +60,6 @@ private final class MockChannelStatus: AudioDeviceStatusProviding {
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { pairs[deviceName] ?? [] }
 }
 
-private final class MockUADConsole: UADSessionOpening {
-    var openSessionError: Error?
-    private(set) var openSessionCallCount = 0
-
-    func openSession(atPath path: String) throws {
-        openSessionCallCount += 1
-        if let error = openSessionError { throw error }
-    }
-}
-
 private final class MockMultiOutputDeviceProvider: MultiOutputDeviceProviding {
     var error: Error?
     private(set) var ensureCalls: [(name: String, subDeviceNames: [String])] = []
@@ -88,66 +78,32 @@ final class ProfileActivationControllerTests: XCTestCase {
 
     func test_activate_shortCircuitsWhenDeviceNotDetected() {
         let configurator = MockConfigurator()
-        let uadConsole = MockUADConsole()
-        let controller = ProfileActivationController(detector: MockDetector(), configurator: configurator, uadConsole: uadConsole)
+        let controller = ProfileActivationController(detector: MockDetector(), configurator: configurator)
 
         let result = controller.activate(profile)
 
         XCTAssertFalse(result.deviceDetected)
         XCTAssertEqual(configurator.setDefaultDeviceCallCount, 0)
-        XCTAssertEqual(uadConsole.openSessionCallCount, 0)
     }
 
-    func test_activate_configuresAudioAndOpensSessionWhenDeviceDetected() {
+    func test_activate_configuresAudioWhenDeviceDetected() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
         let configurator = MockConfigurator()
-        let uadConsole = MockUADConsole()
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: uadConsole)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator)
 
         let result = controller.activate(profile)
 
         XCTAssertTrue(result.deviceDetected)
         XCTAssertNil(result.deviceConfigError)
-        XCTAssertNil(result.uadConsoleError)
         XCTAssertEqual(configurator.setDefaultDeviceCallCount, 1)
-        XCTAssertEqual(uadConsole.openSessionCallCount, 1)
-    }
-
-    func test_activate_stillOpensSessionWhenDeviceConfigFails() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let configurator = MockConfigurator()
-        configurator.setDefaultDeviceError = TestError.boom
-        let uadConsole = MockUADConsole()
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: uadConsole)
-
-        let result = controller.activate(profile)
-
-        XCTAssertNotNil(result.deviceConfigError)
-        XCTAssertEqual(uadConsole.openSessionCallCount, 1)
-        XCTAssertNil(result.uadConsoleError)
-    }
-
-    func test_activate_reportsUADConsoleErrorWithoutFailingActivation() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let uadConsole = MockUADConsole()
-        uadConsole.openSessionError = TestError.boom
-        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: uadConsole)
-
-        let result = controller.activate(profile)
-
-        XCTAssertTrue(result.deviceDetected)
-        XCTAssertNil(result.deviceConfigError)
-        XCTAssertNotNil(result.uadConsoleError)
     }
 
     func test_activate_routesAudioByProfileAudioDeviceNameNotDetectionMatch() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
         let configurator = MockConfigurator()
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole())
+        let controller = ProfileActivationController(detector: detector, configurator: configurator)
 
         _ = controller.activate(profile)
 
@@ -159,7 +115,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         detector.matchedName = "Apollo Solo"
         let configurator = MockConfigurator()
         let profileWithIAC = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: true, daws: [])
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole())
+        let controller = ProfileActivationController(detector: detector, configurator: configurator)
 
         _ = controller.activate(profileWithIAC)
 
@@ -175,7 +131,7 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1"]
         )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole(), multiOutputProvider: multiOutput)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, multiOutputProvider: multiOutput)
 
         let result = controller.activate(profileWithOutput)
 
@@ -195,7 +151,7 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
         )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole(), multiOutputProvider: multiOutput)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, multiOutputProvider: multiOutput)
 
         let result = controller.activate(profileWithOutputs)
 
@@ -215,7 +171,7 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
         )
-        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: MockUADConsole(), multiOutputProvider: multiOutput)
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), multiOutputProvider: multiOutput)
 
         let result = controller.activate(profileWithOutputs)
 
@@ -237,7 +193,7 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole(), channelStatus: channelStatus)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
         let result = controller.activate(profileWithChannels)
 
@@ -252,7 +208,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         detector.matchedName = "Apollo Solo"
         let configurator = MockConfigurator()
         let channelStatus = MockChannelStatus()
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole(), channelStatus: channelStatus)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
         let result = controller.activate(profile)
 
@@ -272,7 +228,7 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: MockUADConsole(), channelStatus: channelStatus)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
         let result = controller.activate(profileWithChannels)
 
@@ -293,13 +249,11 @@ final class ProfileActivationControllerTests: XCTestCase {
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
-        let uadConsole = MockUADConsole()
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: uadConsole, channelStatus: channelStatus)
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
         let result = controller.activate(profileWithChannels)
 
         XCTAssertTrue(result.deviceDetected)
         XCTAssertNotNil(result.channelPairError)
-        XCTAssertEqual(uadConsole.openSessionCallCount, 1)
     }
 }

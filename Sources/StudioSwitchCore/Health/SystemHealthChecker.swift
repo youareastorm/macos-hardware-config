@@ -2,25 +2,17 @@ import Foundation
 
 public final class SystemHealthChecker {
     private let audioStatus: AudioDeviceStatusProviding
-    private let uadConsoleSession: UADConsoleSessionInspecting
 
-    public init(
-        audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
-        uadConsoleSession: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
-    ) {
+    public init(audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()) {
         self.audioStatus = audioStatus
-        self.uadConsoleSession = uadConsoleSession
     }
 
-    /// Every check except external disks, which the menu bar renders as its own expandable
-    /// button (see `MountedDiskInspecting`) rather than a colored-dot row. MIDI and USB power
-    /// checks were dropped from the menu bar entirely; their providers remain available for
-    /// future use but nothing here calls them anymore.
+    /// Audio-only checks. MIDI, USB power, external disks and UAD Console were dropped from the
+    /// menu bar; their providers remain in the codebase but nothing here calls them anymore.
     public func check(for profile: Profile) -> [HealthCheckResult] {
         var results = [
             audioInterfaceResult(for: profile),
-            outputRoutingResult(for: profile),
-            uadConsoleResult(for: profile)
+            outputRoutingResult(for: profile)
         ]
         if let channelsResult = outputChannelsResult(for: profile) {
             results.append(channelsResult)
@@ -87,24 +79,5 @@ public final class SystemHealthChecker {
         }
 
         return HealthCheckResult(label: "Sortie HP", status: .ok)
-    }
-
-    private func uadConsoleResult(for profile: Profile) -> HealthCheckResult {
-        guard let currentSession = uadConsoleSession.currentSessionName() else {
-            return HealthCheckResult(label: "UAD Console", status: .error("UAD Console non lancé ou aucune session ouverte"))
-        }
-
-        let acceptedNames = profile.expectedUADConsoleSessionNames.isEmpty
-            ? [expectedSessionName(fromPath: profile.uadConsoleSession)]
-            : profile.expectedUADConsoleSessionNames
-        guard acceptedNames.contains(where: { currentSession.localizedCaseInsensitiveContains($0) }) else {
-            return HealthCheckResult(label: "UAD Console", status: .error("Session ouverte : \(currentSession)"))
-        }
-
-        return HealthCheckResult(label: "UAD Console", status: .ok)
-    }
-
-    private func expectedSessionName(fromPath path: String) -> String {
-        (path as NSString).lastPathComponent.replacingOccurrences(of: ".uadmix", with: "")
     }
 }

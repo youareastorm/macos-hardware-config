@@ -14,7 +14,6 @@ struct MenuBarView: View {
     @State private var healthProfile: Profile?
     @State private var rowOptions: [String: [String]] = [:]
     @State private var selections: [String: String] = [:]
-    @State private var uadSessions: [UADSessionFile] = []
     @State private var channelPairs: [ChannelPair] = []
     @State private var actionMessage: String?
 
@@ -22,8 +21,7 @@ struct MenuBarView: View {
     private let detector: DeviceDetecting = AudioInterfaceDetector()
     private let activationController = ProfileActivationController(
         detector: AudioInterfaceDetector(),
-        configurator: AudioMIDIConfigurator(),
-        uadConsole: UADConsoleController()
+        configurator: AudioMIDIConfigurator()
     )
     private let dawLauncher = DAWLauncher()
     private let healthChecker = SystemHealthChecker()
@@ -31,9 +29,6 @@ struct MenuBarView: View {
     private let audioDeviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()
     private let audioStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider()
     private let audioConfigurator: AudioMIDIConfiguring = AudioMIDIConfigurator()
-    private let uadConsoleSessionInspector: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector()
-    private let uadSessionLister: UADSessionListing = FileManagerUADSessionLister()
-    private let uadConsole: UADSessionOpening = UADConsoleController()
     private let appLocator: AppLocating = WorkspaceAppLocator()
     private let appLauncher: AppLaunching = WorkspaceAppLauncher()
 
@@ -103,36 +98,14 @@ struct MenuBarView: View {
         .onAppear(perform: loadProfiles)
     }
 
-    /// Runs the real activation (which can drive UAD Console via AppleScript for several seconds)
-    /// off the main thread — this used to block MenuBarView's popover for that whole time, which
-    /// could leave a UAD Console automation attempt half-finished if the view lost focus or another
-    /// action fired while it was still running.
+    /// Runs the real activation off the main thread so the popover stays responsive (creating a
+    /// Multi-Output Device can wait up to a couple of seconds for CoreAudio to catch up).
     private func activateProfile(_ profile: Profile) {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = activationController.activate(profile)
             DispatchQueue.main.async {
                 lastResult = result
                 activeProfile = result.deviceDetected ? profile : nil
-                refreshHealth(for: profile)
-            }
-        }
-    }
-
-    /// Same reasoning as `activateProfile`: keeps a slow, AppleScript-driven action (opening UAD
-    /// Console with a specific session) off the main thread so the popover stays responsive while
-    /// it runs, instead of freezing for several seconds.
-    private func performInBackground(errorPrefix: String, profile: Profile, _ work: @escaping () throws -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            var caughtError: Error?
-            do {
-                try work()
-            } catch {
-                caughtError = error
-            }
-            DispatchQueue.main.async {
-                if let caughtError {
-                    actionMessage = "\(errorPrefix) : \(caughtError)"
-                }
                 refreshHealth(for: profile)
             }
         }
@@ -148,7 +121,7 @@ struct MenuBarView: View {
     }
 
     /// Shows health indicators as soon as the app opens, for whichever profile matches the
-    /// currently connected hardware — read-only (no device switching, no UAD Console opening),
+    /// currently connected hardware — read-only (no device switching),
     /// unlike clicking a profile button.
     private func refreshHealthForConnectedProfile() {
         guard let matched = profiles.first(where: { detector.matchingDeviceName(for: $0) != nil }) else { return }
@@ -170,12 +143,6 @@ struct MenuBarView: View {
 
         rowOptions["Sortie HP"] = connectedDevices
         selections["Sortie HP"] = audioStatus.defaultOutputDeviceName() ?? profile.audioDeviceName
-
-        uadSessions = uadSessionLister.listSessions()
-        let currentSessionTitle = uadConsoleSessionInspector.currentSessionName()
-        rowOptions["UAD Console"] = uadSessions.map(\.name)
-        selections["UAD Console"] = uadSessions.first { currentSessionTitle?.localizedCaseInsensitiveContains($0.name) == true }?.name
-            ?? uadSessions.first?.name ?? ""
 
         if profile.expectedOutputChannelNames.isEmpty {
             channelPairs = []
@@ -202,17 +169,6 @@ struct MenuBarView: View {
 
     private func applySelection(label: String, value: String, profile: Profile) {
         actionMessage = nil
-        if label == "UAD Console" {
-            guard let session = uadSessions.first(where: { $0.name == value }) else {
-                refreshHealth(for: profile)
-                return
-            }
-            performInBackground(errorPrefix: "Échec de l'action sur UAD Console", profile: profile) {
-                try uadConsole.openSession(atPath: session.path)
-            }
-            return
-        }
-
         do {
             switch label {
             case "Interface audio":
@@ -233,13 +189,6 @@ struct MenuBarView: View {
             actionMessage = "Échec de l'action sur \(label) : \(error)"
         }
         refreshHealth(for: profile)
-    }
-
-    private func openUADConsole(profile: Profile) {
-        actionMessage = nil
-        performInBackground(errorPrefix: "Échec de l'ouverture d'UAD Console", profile: profile) {
-            try uadConsole.openSession(atPath: profile.uadConsoleSession)
-        }
     }
 
     private func openAudioMIDISetup() {
@@ -321,15 +270,12 @@ struct MenuBarView: View {
         }
     }
 
-    /// The dot + name is plain text for most rows, but for "UAD Console" and "Sortie HP" it's
-    /// also a button: clicking the name opens the matching native macOS tool directly, while the
-    /// picker on the right still lets you pick a value the way every other row does.
+    /// The dot + name is plain text for most rows, but for "Sortie HP" it's also a button:
+    /// clicking the name opens Audio MIDI Setup directly, while the picker on the right still
+    /// lets you pick a value the way every other row does.
     @ViewBuilder
     private func rowLabel(_ result: HealthCheckResult, profile: Profile) -> some View {
         switch result.label {
-        case "UAD Console":
-            Button { openUADConsole(profile: profile) } label: { rowLabelContent(result) }
-                .buttonStyle(.plain)
         case "Sortie HP":
             Button { openAudioMIDISetup() } label: { rowLabelContent(result) }
                 .buttonStyle(.plain)
@@ -373,10 +319,10 @@ struct MenuBarView: View {
             if let error = result.outputRoutingError {
                 Text("Erreur sortie audio : \(error)").foregroundStyle(.orange)
             }
-            if let error = result.uadConsoleError {
-                Text("Erreur UAD Console : \(error)").foregroundStyle(.orange)
+            if let error = result.channelPairError {
+                Text("Erreur canaux de sortie : \(error)").foregroundStyle(.orange)
             }
-            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.uadConsoleError == nil {
+            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil {
                 Text("\(result.profile.name) activé").foregroundStyle(.green)
             }
         }
