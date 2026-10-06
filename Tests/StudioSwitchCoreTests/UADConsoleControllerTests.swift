@@ -151,17 +151,38 @@ final class UADConsoleControllerTests: XCTestCase {
             consoleAppPath: consoleAppURL.path,
             runningChecker: runningChecker,
             sessionLoader: loader,
-            sessionInspector: inspector
+            sessionInspector: inspector,
+            sleep: { _ in },
+            launchTimeout: 1
         )
         return (controller, launcher, loader, sessionURL)
     }
 
-    func test_ensureSessionOpen_launchesTheConsoleWithTheSessionWhenItIsNotRunning() throws {
-        let f = try makeEnsureFixture(running: false, windowTitle: nil)
+    func test_ensureSessionOpen_coldStart_launchesConsoleThenLoadsTheSessionThroughItsMenu() throws {
+        let f = try makeEnsureFixture(running: false, windowTitle: "UAD Console: empty home")
 
         try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
 
-        XCTAssertEqual(f.launcher.openedFileURL, f.sessionURL)
+        XCTAssertEqual(f.launcher.launchedAppURLs.count, 1)
+        XCTAssertNil(f.launcher.openedFileURL)
+        XCTAssertEqual(f.loader.loadedPaths, [f.sessionURL.path])
+    }
+
+    func test_ensureSessionOpen_coldStart_skipsTheLoadWhenConsoleStartsOnTheRightSession() throws {
+        let f = try makeEnsureFixture(running: false, windowTitle: "UAD Console: OCTO EMPTY")
+
+        try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
+
+        XCTAssertEqual(f.launcher.launchedAppURLs.count, 1)
+        XCTAssertTrue(f.loader.loadedPaths.isEmpty)
+    }
+
+    func test_ensureSessionOpen_coldStart_throwsWhenTheConsoleWindowNeverAppears() throws {
+        let f = try makeEnsureFixture(running: false, windowTitle: nil)
+
+        XCTAssertThrowsError(try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)) { error in
+            XCTAssertEqual(error as? UADConsoleControllerError, .consoleWindowNeverAppeared)
+        }
         XCTAssertTrue(f.loader.loadedPaths.isEmpty)
     }
 
