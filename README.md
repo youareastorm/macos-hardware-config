@@ -158,11 +158,13 @@ The menu used to also show UAD Console, MIDI, USB power and external-disk rows. 
 
 - Check on the Apollo x8 that setting the clock through the engine works: on an Apollo Solo, `Internal` is the only clock offered, so a clock *change* has not been seen yet. The exact `set` value format for a string (`Internal`) is unverified.
 - Check that the monitor goes to 0 dB on plug-in.
+- Home: when UAD Console starts, a 48V confirmation dialog can appear; StudioSwitch should click OK on it at Home (not done yet).
+- Seen once on the first launch after a rebuild, before a reboot fixed it: Console stayed on "New Session" at 44.1 kHz, its window title had no session name (just "UAD Console", so the session switch can't confirm), and the engine listed both units offline. Not diagnosed; watch for it.
 
 ### Validated on real hardware
 
 Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
 
-Also verified on the Apollo Solo: reading the clock and monitor level from the UA Mixer Engine, setting the monitor level (-28 → -35 dB, -34 → -35 dB, shown on Console's knob), and unchecking Offline Devices (checked → unchecked, confirmed in `ConsolePrefs.json`).
+Also verified on the Apollo Solo: reading the clock and monitor level from the UA Mixer Engine, setting the monitor level (-28 → -35 dB, -34 → -35 dB, shown on Console's knob), and unchecking Offline Devices (checked → unchecked, confirmed in `ConsolePrefs.json`). After a reboot with StudioSwitch in Login Items, the whole Home setup came back on its own (session `empty home`, Offline Devices unchecked, clock, monitor level, VIRTUAL 1/2).
 
 Not verified: changing the clock source (see "Next try"), the IAC Driver step, DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).
