@@ -10,6 +10,7 @@ enum AutoActivationSetting {
 @main
 struct StudioSwitchApp: App {
     private let autoActivation: AutoActivationCoordinator
+    @ObservedObject private var status = StatusMonitor.shared
 
     init() {
         FileActivationLogger.shared.log("StudioSwitch démarré")
@@ -29,15 +30,20 @@ struct StudioSwitchApp: App {
             ),
             isEnabled: { AutoActivationSetting.isEnabled },
             watcher: CoreAudioDeviceListWatcher(),
-            logger: FileActivationLogger.shared
+            logger: FileActivationLogger.shared,
+            onActivation: { StatusMonitor.shared.recordActivation($0) }
         )
         coordinator.start()
+        StatusMonitor.shared.start()
         autoActivation = coordinator
     }
 
     var body: some Scene {
-        MenuBarExtra("StudioSwitch", systemImage: "waveform") {
+        MenuBarExtra {
             MenuBarView()
+        } label: {
+            // A triangle as soon as a check isn't green or the last activation had an error.
+            Image(systemName: status.needsAttention ? "exclamationmark.triangle.fill" : "waveform")
         }
         .menuBarExtraStyle(.window)
     }

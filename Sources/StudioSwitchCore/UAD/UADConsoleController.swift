@@ -32,6 +32,7 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
     private let sessionInspector: UADConsoleSessionInspecting
     private let sleep: (TimeInterval) -> Void
     private let launchTimeout: TimeInterval
+    private let hasUnsavedChanges: () -> Bool
     private static let pollInterval: TimeInterval = 0.5
     private static let settleDelayAfterLaunch: TimeInterval = 2
 
@@ -44,7 +45,8 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
         sessionLoader: UADConsoleSessionLoading = AppleScriptUADConsoleSessionLoader(),
         sessionInspector: UADConsoleSessionInspecting = AppleScriptUADConsoleSessionInspector(),
         sleep: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
-        launchTimeout: TimeInterval = 40
+        launchTimeout: TimeInterval = 40,
+        hasUnsavedChanges: @escaping () -> Bool = { (try? UAMixerEngineController().sessionHasUnsavedChanges()) ?? false }
     ) {
         self.appLauncher = appLauncher
         self.fileManager = fileManager
@@ -55,6 +57,7 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
         self.sessionInspector = sessionInspector
         self.sleep = sleep
         self.launchTimeout = launchTimeout
+        self.hasUnsavedChanges = hasUnsavedChanges
     }
 
     /// Verified on real hardware with UAD Console 1.3.1: launching it *with* a session file
@@ -75,11 +78,15 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
             try waitForSessionWindow()
         }
 
-        if let openTitle = sessionInspector.currentSessionName(),
+        let openTitle = sessionInspector.currentSessionName()
+        if let openTitle,
            Self.sessionName(fromWindowTitle: openTitle).caseInsensitiveCompare(Self.sessionName(fromPath: expandedPath)) == .orderedSame {
             return
         }
-        try sessionLoader.loadSession(atPath: expandedPath)
+        // The title's asterisk can lag behind (seen: engine dirty, title without "*"), so the
+        // UA Mixer Engine's own flag is checked too.
+        let unsaved = openTitle?.hasSuffix("*") == true || hasUnsavedChanges()
+        try sessionLoader.loadSession(atPath: expandedPath, discardingUnsavedChanges: unsaved)
     }
 
     private func waitForSessionWindow() throws {
@@ -117,7 +124,7 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
         if runningChecker.isRunning(bundleID: consoleBundleID) {
             // UAD Console is already open with some session — a plain file-open is silently
             // ignored (see AppleScriptUADConsoleSessionLoader), so drive its File > Open... menu.
-            try sessionLoader.loadSession(atPath: expandedPath)
+            try sessionLoader.loadSession(atPath: expandedPath, discardingUnsavedChanges: hasUnsavedChanges())
         } else {
             try appLauncher.open(fileURL: URL(fileURLWithPath: expandedPath), withApplicationAt: URL(fileURLWithPath: consoleAppPath))
         }

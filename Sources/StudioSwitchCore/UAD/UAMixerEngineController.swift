@@ -67,6 +67,13 @@ public final class UAMixerEngineController: UAMixerControlling {
         }
     }
 
+    /// The engine's `Dirty` flag: the open UAD Console session has unsaved changes.
+    public func sessionHasUnsavedChanges() throws -> Bool {
+        try withConnection { connection in
+            Self.propertyValue("Dirty", in: try connection.get("/")) as? Bool ?? false
+        }
+    }
+
     public func apply(clockSource wanted: String?, monitorLevel wantedLevel: Double?) throws {
         try withConnection { connection in
             if let wanted {

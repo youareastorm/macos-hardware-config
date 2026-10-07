@@ -39,7 +39,7 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
 
     private static let openPanelTitle = "Choose a session file to open:"
 
-    public func loadSession(atPath path: String) throws {
+    public func loadSession(atPath path: String, discardingUnsavedChanges: Bool) throws {
         let sessionName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
         let source = """
         tell application "System Events"
@@ -47,7 +47,7 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
                 set frontmost to true
                 delay 0.5
                 click menu item "Open..." of menu "File" of menu bar 1
-
+                \(discardingUnsavedChanges ? Self.dismissSaveQuestion : "")
                 set waited to 0
                 repeat until (exists window "\(Self.openPanelTitle)")
                     delay 0.25
@@ -86,6 +86,17 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
             throw UADConsoleSessionLoaderError.appleScriptFailed("\(error)")
         }
     }
+
+    /// With unsaved changes, File > Open... first shows UAD Console's own "save changes?" question
+    /// (logged by Console as `Rack_Question`, with a `dont_save` button). It's drawn by Console
+    /// itself, not a macOS window, so System Events can't see or click it. Verified twice on real
+    /// hardware (UAD Console 1.3.1): Escape closes it *without saving* (the session file stayed
+    /// byte-identical, the engine's `Dirty` flag went false) and the Open panel follows. Escape is
+    /// only sent if the panel isn't already there, so it can't cancel the panel itself.
+    private static let dismissSaveQuestion = """
+    delay 1.5
+                    if not (exists window "\(openPanelTitle)") then key code 53
+    """
 
     private static func escaped(_ value: String) -> String {
         value

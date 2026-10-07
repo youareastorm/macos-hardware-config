@@ -20,8 +20,10 @@ private final class MockRunningApplicationChecker: RunningApplicationChecking {
 private final class MockSessionLoader: UADConsoleSessionLoading {
     var error: Error?
     private(set) var loadedPaths: [String] = []
-    func loadSession(atPath path: String) throws {
+    private(set) var discardFlags: [Bool] = []
+    func loadSession(atPath path: String, discardingUnsavedChanges: Bool) throws {
         loadedPaths.append(path)
+        discardFlags.append(discardingUnsavedChanges)
         if let error { throw error }
     }
 }
@@ -234,5 +236,46 @@ final class UADConsoleControllerTests: XCTestCase {
         try f.controller.ensureSessionOpen(atPath: f.sessionURL.path)
 
         XCTAssertEqual(f.loader.loadedPaths, [f.sessionURL.path])
+    }
+
+    private func runningController(title: String, dirty: Bool, loader: MockSessionLoader) throws -> (UADConsoleController, String) {
+        let sessionURL = tempDirectory.appendingPathComponent("empty home.uadmix")
+        try Data().write(to: sessionURL)
+        let running = MockRunningApplicationChecker()
+        running.runningBundleIDs = [UADConsoleController.defaultConsoleBundleID]
+        let inspector = MockSessionInspector()
+        inspector.title = title
+        let controller = UADConsoleController(
+            appLauncher: MockAppLauncher(), consoleAppPath: tempDirectory.path, runningChecker: running,
+            sessionLoader: loader, sessionInspector: inspector, sleep: { _ in }, hasUnsavedChanges: { dirty }
+        )
+        return (controller, sessionURL.path)
+    }
+
+    func test_ensureSessionOpen_discardsUnsavedChangesWhenTheEngineSaysDirty() throws {
+        let loader = MockSessionLoader()
+        let (controller, path) = try runningController(title: "UAD Console: OCTO EMPTY", dirty: true, loader: loader)
+
+        try controller.ensureSessionOpen(atPath: path)
+
+        XCTAssertEqual(loader.discardFlags, [true])
+    }
+
+    func test_ensureSessionOpen_discardsUnsavedChangesWhenTheTitleHasAnAsterisk() throws {
+        let loader = MockSessionLoader()
+        let (controller, path) = try runningController(title: "UAD Console: OCTO EMPTY*", dirty: false, loader: loader)
+
+        try controller.ensureSessionOpen(atPath: path)
+
+        XCTAssertEqual(loader.discardFlags, [true])
+    }
+
+    func test_ensureSessionOpen_doesNotDiscardWhenTheSessionIsClean() throws {
+        let loader = MockSessionLoader()
+        let (controller, path) = try runningController(title: "UAD Console: OCTO EMPTY", dirty: false, loader: loader)
+
+        try controller.ensureSessionOpen(atPath: path)
+
+        XCTAssertEqual(loader.discardFlags, [false])
     }
 }

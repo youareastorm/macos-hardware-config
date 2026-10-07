@@ -120,7 +120,7 @@ Any step that doesn't happen raises an error shown in orange in the menu, instea
 - Launching UAD Console *with* a session file doesn't load it either: it starts on its default session.
 - The Open panel appears with a delay; typing before it's there sends the keystrokes elsewhere and nothing loads (the cause of earlier failures).
 - `NSAppleScript` must run on the main thread; StudioSwitch runs its scripts there even when activation happens in the background.
-- Switching discards unsaved changes of the current session without asking.
+- With unsaved changes in the open session (UA Mixer Engine `Dirty` flag, or `*` in the window title), File > Open... first shows UAD Console's own "save changes?" question. It's drawn by Console itself (`Rack_Question` in `~/Library/Logs/Universal Audio/UAD Console_*.txt`), not a macOS window, so System Events can't see or click it; it blocked the switch after a reboot until clicked by hand. StudioSwitch now presses Escape when it's up, which closes it **without saving** (verified: session file byte-identical, `Dirty` back to false) and lets the Open panel come. Earlier notes here said switching discarded changes without asking: that was wrong in this case.
 
 ### UAD clock, monitor level and offline units
 
@@ -133,6 +133,10 @@ The clock and the monitor level go through the **UA Mixer Engine**, the backgrou
 Each check or activation uses **one** connection: the engine (11.9.0) crashed (segfault in `Ntwk_Socket_Server::createConnectionObject`) when sent a burst of short-lived connections. It isn't restarted automatically after a crash (its launch agent only runs at login): `launchctl kickstart gui/$(id -u)/com.uaudio.ua_mixer_engine`.
 
 "Offline Devices" is a UAD Console preference, not an engine property. Its state is read from `"Show Offline Devices"` in `~/Library/Preferences/Universal Audio/UAD ConsolePrefs.json` (Console rewrites it within 0.2 s of a click), and it is unchecked by clicking the View menu item with System Events (needs UAD Console running and the Accessibility permission). The menu's own check mark isn't read: it only refreshes when the menu is opened.
+
+### Menu-bar icon
+
+The icon turns into a warning triangle as soon as a health check isn't green or the last activation (automatic or clicked) had an error, so a problem shows without opening the menu. The checks re-run every 60 s in the background (no UAD Console window is touched; one UA Mixer Engine connection per pass). The menu also shows the last automatic activation's errors.
 
 ### Activation log
 
@@ -162,6 +166,7 @@ The menu used to also show UAD Console, MIDI, USB power and external-disk rows. 
 
 - Check on the Apollo x8 that setting the clock through the engine works: on an Apollo Solo, `Internal` is the only clock offered, so a clock *change* has not been seen yet. The exact `set` value format for a string (`Internal`) is unverified.
 - Check that the monitor goes to 0 dB on plug-in.
+- Monitor channel pair: launching UAD Console resets it to MON L / MON R (seen in the activation log after a reboot); StudioSwitch now re-checks it after the UAD steps and puts it back (verified at home).
 - Home: when UAD Console starts, a 48V confirmation dialog can appear; StudioSwitch should click OK on it at Home (not done yet).
 - Seen once on the first launch after a rebuild, before a reboot fixed it: Console stayed on "New Session" at 44.1 kHz, its window title had no session name (just "UAD Console", so the session switch can't confirm), and the engine listed both units offline. Not diagnosed; watch for it.
 

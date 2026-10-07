@@ -185,4 +185,17 @@ final class AutoActivationCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(logger.lines.contains("Changement de périphériques signalé"), "\(logger.lines)")
     }
+
+    func test_evaluate_reportsEachActivationResult() {
+        detector.connectedProfileName = "Home"
+        var reported: [String] = []
+        let coordinator = AutoActivationCoordinator(
+            loadProfiles: { [self.home, self.studio] }, detector: detector, isAudioDeviceOnline: { _ in true },
+            activator: activator, isEnabled: { true }, watcher: MockWatcher(), onActivation: { reported.append($0.profile.name) }
+        )
+
+        coordinator.evaluate()
+
+        XCTAssertEqual(reported, ["Home"])
+    }
 }

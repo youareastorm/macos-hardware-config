@@ -5,5 +5,7 @@ public enum UADConsoleSessionLoaderError: Error, Equatable {
 public protocol UADConsoleSessionLoading {
     /// Asks UAD Console, already running, to load a different session file — see
     /// `AppleScriptUADConsoleSessionLoader` for why this needs more than a plain file-open.
-    func loadSession(atPath path: String) throws
+    /// `discardingUnsavedChanges`: the open session has unsaved changes, so UAD Console will first
+    /// ask whether to save them; answer "Don't Save".
+    func loadSession(atPath path: String, discardingUnsavedChanges: Bool) throws
 }

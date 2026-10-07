@@ -146,4 +146,14 @@ final class UAMixerEngineControllerTests: XCTestCase {
         XCTAssertEqual(connections, 1)
         XCTAssertTrue(fake.closed)
     }
+
+    func test_sessionHasUnsavedChanges_readsTheEnginesDirtyFlag() throws {
+        let fake = FakeEngineConnection.homeLayout()
+        fake.nodes["/"]?.properties["Dirty"] = ["value": true]
+
+        XCTAssertTrue(try controller(fake).sessionHasUnsavedChanges())
+
+        fake.nodes["/"]?.properties["Dirty"] = ["value": false]
+        XCTAssertFalse(try controller(fake).sessionHasUnsavedChanges())
+    }
 }

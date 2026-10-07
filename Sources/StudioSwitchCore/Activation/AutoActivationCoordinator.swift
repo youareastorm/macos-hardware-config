@@ -24,6 +24,7 @@ public final class AutoActivationCoordinator {
     private let watcher: AudioDeviceListWatching
     private let debounce: TimeInterval
     private let logger: ActivationLogging
+    private let onActivation: (ProfileActivationResult) -> Void
 
     private let queue = DispatchQueue(label: "com.simonrenard.studioswitch.autoactivation")
     private var lastActivatedProfileName: String?
@@ -37,7 +38,8 @@ public final class AutoActivationCoordinator {
         isEnabled: @escaping () -> Bool,
         watcher: AudioDeviceListWatching,
         debounce: TimeInterval = 2,
-        logger: ActivationLogging = NoActivationLogger()
+        logger: ActivationLogging = NoActivationLogger(),
+        onActivation: @escaping (ProfileActivationResult) -> Void = { _ in }
     ) {
         self.loadProfiles = loadProfiles
         self.detector = detector
@@ -47,6 +49,7 @@ public final class AutoActivationCoordinator {
         self.watcher = watcher
         self.debounce = debounce
         self.logger = logger
+        self.onActivation = onActivation
     }
 
     public func start() {
@@ -105,6 +108,7 @@ public final class AutoActivationCoordinator {
         }
 
         let result = activator.activate(matched)
+        onActivation(result)
         if result.deviceDetected && result.deviceConfigError == nil {
             lastActivatedProfileName = matched.name
         } else {

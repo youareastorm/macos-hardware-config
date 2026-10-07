@@ -17,6 +17,7 @@ struct MenuBarView: View {
     @State private var channelPairs: [ChannelPair] = []
     @State private var actionMessage: String?
     @AppStorage(AutoActivationSetting.key) private var autoActivationEnabled = true
+    @ObservedObject private var status = StatusMonitor.shared
 
     private let profileStore = ProfileStore()
     private let detector: DeviceDetecting = AudioInterfaceDetector()
@@ -56,7 +57,8 @@ struct MenuBarView: View {
                 }
             }
 
-            if let result = lastResult {
+            // A click's result, or else what the last automatic activation (plug-in, startup) did.
+            if let result = lastResult ?? status.lastActivation {
                 Divider()
                 statusText(for: result)
             }
@@ -113,6 +115,7 @@ struct MenuBarView: View {
     private func activateProfile(_ profile: Profile) {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = activationController.activate(profile)
+            StatusMonitor.shared.recordActivation(result)
             DispatchQueue.main.async {
                 lastResult = result
                 activeProfile = result.deviceDetected ? profile : nil
@@ -140,6 +143,7 @@ struct MenuBarView: View {
 
     private func refreshHealth(for profile: Profile) {
         healthResults = healthChecker.check(for: profile)
+        StatusMonitor.shared.recordHealth(healthResults)
         healthProfile = profile
         actionMessage = nil
         refreshRowOptions(for: profile)
