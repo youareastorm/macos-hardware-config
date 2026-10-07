@@ -134,6 +134,10 @@ Each check or activation uses **one** connection: the engine (11.9.0) crashed (s
 
 "Offline Devices" is a UAD Console preference, not an engine property. Its state is read from `"Show Offline Devices"` in `~/Library/Preferences/Universal Audio/UAD ConsolePrefs.json` (Console rewrites it within 0.2 s of a click), and it is unchecked by clicking the View menu item with System Events (needs UAD Console running and the Accessibility permission). The menu's own check mark isn't read: it only refreshes when the menu is opened.
 
+### Activation log
+
+Every automatic evaluation and every activation (automatic or from the menu) is written to `~/Library/Logs/StudioSwitch/activation.log`, one timestamped line per event (open it in Console.app or `tail -f`). It records: app start, each device-list change macOS signals, for each profile whether its Thunderbolt hardware and CoreAudio device are online, the decision (activate / already active / nothing ready), then each activation step with its duration and error, the output channel pair before and after it is set and once more at the very end (after UAD Console), the Offline Devices state, and the UA Mixer Engine clock and monitor level before and after. The file is moved to `activation.log.1` past 1 MB.
+
 ### Health indicators
 
 After activating a profile (or when opening the menu, for whichever profile matches the connected hardware) the menu shows one row per check: a colored dot (green/yellow/red), the check's name, and a dropdown of the real alternatives. Picking one applies it immediately and re-runs the checks; "Actualiser" re-runs them without reactivating.

@@ -113,6 +113,44 @@ private final class MockOfflineDevices: UADConsoleOfflineDevicesControlling {
     }
 }
 
+private final class RecordingLogger: ActivationLogging {
+    private(set) var lines: [String] = []
+    func log(_ message: String) { lines.append(message) }
+}
+
+/// Reports a different active pair before and after the UAD steps, the way a UA Mixer Engine
+/// restart could reset it.
+private final class ChangingChannelStatus: AudioDeviceStatusProviding {
+    var pairs: [ChannelPair] = []
+    var current: [String] = ["MON L", "MON R"]
+    func isDeviceOnline(named deviceName: String) -> Bool { true }
+    func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? { nil }
+    func defaultOutputDeviceName() -> String? { nil }
+    func defaultInputDeviceName() -> String? { nil }
+    func builtInOutputDeviceName() -> String? { nil }
+    func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { current }
+    func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { pairs }
+}
+
+private final class PairApplyingConfigurator: AudioMIDIConfiguring {
+    let status: ChangingChannelStatus
+    init(status: ChangingChannelStatus) { self.status = status }
+    func setDefaultDevice(named deviceName: String) throws {}
+    func setDefaultInputDevice(named deviceName: String) throws {}
+    func setDefaultOutputDevice(named deviceName: String) throws {}
+    func enableIACDriverIfPresent() throws {}
+    func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
+        status.current = [pair.firstName, pair.secondName]
+    }
+    func enableMIDIDevice(named deviceName: String) throws {}
+}
+
+private final class PairResettingConsole: UADConsoleSessionEnsuring {
+    let status: ChangingChannelStatus
+    init(status: ChangingChannelStatus) { self.status = status }
+    func ensureSessionOpen(atPath path: String) throws { status.current = ["MON L", "MON R"] }
+}
+
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
@@ -422,5 +460,52 @@ final class ProfileActivationControllerTests: XCTestCase {
 
         XCTAssertTrue(mixer.applyCalls.isEmpty)
         XCTAssertEqual(offline.hideCalls, 0)
+    }
+
+    func test_activate_logsTheChannelPairBeforeAfterAndOnceTheUADStepsAreDone() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let status = ChangingChannelStatus()
+        status.pairs = [ChannelPair(firstChannel: 3, secondChannel: 4, firstName: "VIRTUAL 1", secondName: "VIRTUAL 2")]
+        let configurator = PairApplyingConfigurator(status: status)
+        let logger = RecordingLogger()
+        let pairProfile = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+        )
+        let controller = ProfileActivationController(
+            detector: detector, configurator: configurator, channelStatus: status,
+            uadConsole: PairResettingConsole(status: status), logger: logger
+        )
+
+        _ = controller.activate(pairProfile)
+
+        let joined = logger.lines.joined(separator: "\n")
+        XCTAssertTrue(joined.contains("paire avant : MON L / MON R"), joined)
+        XCTAssertTrue(joined.contains("paire après : VIRTUAL 1 / VIRTUAL 2"), joined)
+        XCTAssertTrue(joined.contains("paire à la fin : MON L / MON R"), joined)
+    }
+
+    func test_activate_logsEachStepAndItsError() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let uadConsole = MockUADConsole()
+        uadConsole.error = TestError.boom
+        let logger = RecordingLogger()
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: uadConsole, logger: logger)
+
+        _ = controller.activate(profile)
+
+        XCTAssertTrue(logger.lines.contains { $0.hasPrefix("Activation de Home") }, "\(logger.lines)")
+        XCTAssertTrue(logger.lines.contains { $0.contains("Session UAD Console") && $0.contains("ÉCHEC") && $0.contains("boom") }, "\(logger.lines)")
+    }
+
+    func test_activate_logsWhenTheDeviceIsNotDetected() {
+        let logger = RecordingLogger()
+        let controller = ProfileActivationController(detector: MockDetector(), configurator: MockConfigurator(), logger: logger)
+
+        _ = controller.activate(profile)
+
+        XCTAssertTrue(logger.lines.contains { $0.contains("non détecté") }, "\(logger.lines)")
     }
 }

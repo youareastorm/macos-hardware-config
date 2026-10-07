@@ -1,3 +1,5 @@
+import Foundation
+
 public struct ProfileActivationResult: Equatable {
     public let profile: Profile
     public let deviceDetected: Bool
@@ -17,6 +19,7 @@ public final class ProfileActivationController {
     private let uadConsole: UADConsoleSessionEnsuring?
     private let uadMixer: UAMixerControlling?
     private let uadOfflineDevices: UADConsoleOfflineDevicesControlling?
+    private let logger: ActivationLogging
 
     public init(
         detector: DeviceDetecting,
@@ -25,7 +28,8 @@ public final class ProfileActivationController {
         channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
         uadConsole: UADConsoleSessionEnsuring? = nil,
         uadMixer: UAMixerControlling? = nil,
-        uadOfflineDevices: UADConsoleOfflineDevicesControlling? = nil
+        uadOfflineDevices: UADConsoleOfflineDevicesControlling? = nil,
+        logger: ActivationLogging = NoActivationLogger()
     ) {
         self.detector = detector
         self.configurator = configurator
@@ -34,15 +38,18 @@ public final class ProfileActivationController {
         self.uadConsole = uadConsole
         self.uadMixer = uadMixer
         self.uadOfflineDevices = uadOfflineDevices
+        self.logger = logger
     }
 
     public func activate(_ profile: Profile) -> ProfileActivationResult {
-        guard detector.matchingDeviceName(for: profile) != nil else {
+        guard let hardwareName = detector.matchingDeviceName(for: profile) else {
+            logger.log("Activation de \(profile.name) : \(profile.deviceNameMatch) non détecté")
             return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, outputRoutingError: nil, channelPairError: nil, uadConsoleError: nil)
         }
+        let started = Date()
+        logger.log("Activation de \(profile.name) (carte : \(hardwareName))")
 
-        var deviceConfigError: String?
-        do {
+        let deviceConfigError = step("Entrée/sortie par défaut → \(profile.audioDeviceName)") {
             if profile.outputDeviceTargetName != nil {
                 try configurator.setDefaultInputDevice(named: profile.audioDeviceName)
             } else {
@@ -51,52 +58,89 @@ public final class ProfileActivationController {
             if profile.useIACDriver {
                 try configurator.enableIACDriverIfPresent()
             }
-        } catch {
-            deviceConfigError = "\(error)"
         }
 
         var outputRoutingError: String?
         if let target = profile.outputDeviceTargetName {
-            do {
+            outputRoutingError = step("Sortie → \(target)") {
                 if profile.expectedOutputDeviceNames.count > 1 {
                     try multiOutputProvider.ensureMultiOutputDevice(named: target, subDeviceNames: profile.expectedOutputDeviceNames)
                 }
                 try configurator.setDefaultOutputDevice(named: target)
-            } catch {
-                outputRoutingError = "\(error)"
             }
         }
 
-        let channelPairError = applyOutputChannelPair(for: profile)
+        var channelPairError: String?
+        if profile.expectedOutputChannelNames.count == 2 {
+            logPair("avant", profile)
+            channelPairError = step("Paire de sortie → \(profile.expectedOutputChannelNames.joined(separator: " / "))") {
+                if let error = applyOutputChannelPair(for: profile) { throw ActivationStepError(message: error) }
+            }
+            logPair("après", profile)
+        }
 
-        var uadConsoleError: String?
-        do {
+        let uadConsoleError = step("Session UAD Console → \((profile.uadConsoleSession as NSString).lastPathComponent)") {
             try uadConsole?.ensureSessionOpen(atPath: profile.uadConsoleSession)
-        } catch {
-            uadConsoleError = "\(error)"
         }
 
         // After the session: hiding offline units needs UAD Console running, and the mixer
         // settings go last so a freshly loaded session can't override them.
         var uadOfflineDevicesError: String?
-        if profile.hideUADOfflineDevices {
-            do {
-                try uadOfflineDevices?.hideOfflineDevices()
-            } catch {
-                uadOfflineDevicesError = "\(error)"
+        if profile.hideUADOfflineDevices, let uadOfflineDevices {
+            logger.log("  Offline Devices avant : \(describe { try uadOfflineDevices.isShowingOfflineDevices() ? "coché" : "décoché" })")
+            uadOfflineDevicesError = step("Masquer les cartes hors ligne") {
+                try uadOfflineDevices.hideOfflineDevices()
             }
         }
 
         var uadMixerError: String?
-        if profile.expectedClockSource != nil || profile.expectedMonitorLevel != nil {
-            do {
-                try uadMixer?.apply(clockSource: profile.expectedClockSource, monitorLevel: profile.expectedMonitorLevel)
-            } catch {
-                uadMixerError = "\(error)"
+        if profile.expectedClockSource != nil || profile.expectedMonitorLevel != nil, let uadMixer {
+            logger.log("  moteur UA avant : \(describe { Self.describe(try uadMixer.currentState()) })")
+            uadMixerError = step("Clock → \(profile.expectedClockSource ?? "inchangée"), moniteur → \(profile.expectedMonitorLevel.map { "\($0) dB" } ?? "inchangé")") {
+                try uadMixer.apply(clockSource: profile.expectedClockSource, monitorLevel: profile.expectedMonitorLevel)
             }
+            logger.log("  moteur UA après : \(describe { Self.describe(try uadMixer.currentState()) })")
         }
 
+        // Re-read once everything else ran: launching UAD Console restarts the UA Mixer Engine,
+        // which may reset the active pair set earlier.
+        if profile.expectedOutputChannelNames.count == 2 {
+            logPair("à la fin", profile)
+        }
+        logger.log("Activation de \(profile.name) terminée en \(Self.seconds(since: started))")
+
         return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError)
+    }
+
+    /// Runs one activation step, logs its outcome and duration, and returns its error message.
+    private func step(_ name: String, _ body: () throws -> Void) -> String? {
+        let started = Date()
+        do {
+            try body()
+            logger.log("  \(name) : ok (\(Self.seconds(since: started)))")
+            return nil
+        } catch {
+            let message = (error as? ActivationStepError)?.message ?? "\(error)"
+            logger.log("  \(name) : ÉCHEC (\(Self.seconds(since: started))) \(message)")
+            return message
+        }
+    }
+
+    private func logPair(_ moment: String, _ profile: Profile) {
+        let current = channelStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName)
+        logger.log("  paire \(moment) : \(current.map { $0.joined(separator: " / ") } ?? "illisible")")
+    }
+
+    private func describe(_ read: () throws -> String) -> String {
+        do { return try read() } catch { return "illisible (\(error))" }
+    }
+
+    private static func describe(_ state: UAMixerState) -> String {
+        "clock \(state.clockSource), moniteur \(String(format: "%g", state.monitorLevel)) dB"
+    }
+
+    private static func seconds(since date: Date) -> String {
+        String(format: "%.1f s", Date().timeIntervalSince(date))
     }
 
     /// Writes the profile's expected output channel pair (e.g. an Apollo's software-return
@@ -121,4 +165,8 @@ public final class ProfileActivationController {
             return "\(error)"
         }
     }
+}
+
+private struct ActivationStepError: Error {
+    let message: String
 }

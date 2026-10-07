@@ -25,7 +25,8 @@ struct MenuBarView: View {
         configurator: AudioMIDIConfigurator(),
         uadConsole: UADConsoleController(),
         uadMixer: UAMixerEngineController(),
-        uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController()
+        uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController(),
+        logger: FileActivationLogger.shared
     )
     private let dawLauncher = DAWLauncher()
     private let healthChecker = SystemHealthChecker(

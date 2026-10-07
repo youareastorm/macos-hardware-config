@@ -23,6 +23,7 @@ public final class AutoActivationCoordinator {
     private let isEnabled: () -> Bool
     private let watcher: AudioDeviceListWatching
     private let debounce: TimeInterval
+    private let logger: ActivationLogging
 
     private let queue = DispatchQueue(label: "com.simonrenard.studioswitch.autoactivation")
     private var lastActivatedProfileName: String?
@@ -35,7 +36,8 @@ public final class AutoActivationCoordinator {
         activator: ProfileActivating,
         isEnabled: @escaping () -> Bool,
         watcher: AudioDeviceListWatching,
-        debounce: TimeInterval = 2
+        debounce: TimeInterval = 2,
+        logger: ActivationLogging = NoActivationLogger()
     ) {
         self.loadProfiles = loadProfiles
         self.detector = detector
@@ -44,33 +46,60 @@ public final class AutoActivationCoordinator {
         self.isEnabled = isEnabled
         self.watcher = watcher
         self.debounce = debounce
+        self.logger = logger
     }
 
     public func start() {
         watcher.start { [weak self] in self?.scheduleEvaluation() }
-        queue.async { [weak self] in self?.evaluate() }
+        queue.async { [weak self] in self?.evaluate(trigger: "lancement") }
     }
 
     /// Collapses a burst of device-list events into one evaluation, once things settle.
     private func scheduleEvaluation() {
         queue.async { [weak self] in
             guard let self else { return }
+            self.logger.log("Changement de périphériques signalé")
             self.pendingEvaluation?.cancel()
-            let work = DispatchWorkItem { [weak self] in self?.evaluate() }
+            let work = DispatchWorkItem { [weak self] in self?.evaluate(trigger: "changement de périphériques") }
             self.pendingEvaluation = work
             self.queue.asyncAfter(deadline: .now() + self.debounce, execute: work)
         }
     }
 
-    func evaluate() {
-        guard isEnabled() else { return }
+    /// Lets queued (not debounced) work finish (for tests).
+    func waitForPendingWork() {
+        queue.sync {}
+    }
 
-        let profiles = (try? loadProfiles()) ?? []
-        let matched = profiles.first {
-            detector.matchingDeviceName(for: $0) != nil && isAudioDeviceOnline($0.audioDeviceName)
+    func evaluate(trigger: String = "manuel") {
+        logger.log("Évaluation (\(trigger))")
+        guard isEnabled() else {
+            logger.log("  bascule auto désactivée, rien à faire")
+            return
         }
-        guard matched?.name != lastActivatedProfileName else { return }
+
+        let profiles: [Profile]
+        do {
+            profiles = try loadProfiles()
+        } catch {
+            logger.log("  lecture des profils impossible : \(error)")
+            profiles = []
+        }
+
+        var matched: Profile?
+        for profile in profiles {
+            let hardware = detector.matchingDeviceName(for: profile) != nil
+            let audioOnline = isAudioDeviceOnline(profile.audioDeviceName)
+            logger.log("  \(profile.name) : carte \(hardware ? "détectée" : "non détectée"), périphérique audio \(audioOnline ? "en ligne" : "hors ligne")")
+            if matched == nil && hardware && audioOnline { matched = profile }
+        }
+
+        guard matched?.name != lastActivatedProfileName else {
+            logger.log(matched.map { "  \($0.name) déjà actif, rien à faire" } ?? "  aucun profil prêt")
+            return
+        }
         guard let matched else {
+            logger.log("  aucun profil prêt")
             lastActivatedProfileName = nil
             return
         }
@@ -78,6 +107,8 @@ public final class AutoActivationCoordinator {
         let result = activator.activate(matched)
         if result.deviceDetected && result.deviceConfigError == nil {
             lastActivatedProfileName = matched.name
+        } else {
+            logger.log("  \(matched.name) n'a pas pu être configuré, nouvel essai au prochain changement")
         }
     }
 }

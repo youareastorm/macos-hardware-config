@@ -12,6 +12,7 @@ struct StudioSwitchApp: App {
     private let autoActivation: AutoActivationCoordinator
 
     init() {
+        FileActivationLogger.shared.log("StudioSwitch démarré")
         NSApplication.shared.setActivationPolicy(.accessory)
 
         let coordinator = AutoActivationCoordinator(
@@ -23,10 +24,12 @@ struct StudioSwitchApp: App {
                 configurator: AudioMIDIConfigurator(),
                 uadConsole: UADConsoleController(),
                 uadMixer: UAMixerEngineController(),
-                uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController()
+                uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController(),
+                logger: FileActivationLogger.shared
             ),
             isEnabled: { AutoActivationSetting.isEnabled },
-            watcher: CoreAudioDeviceListWatcher()
+            watcher: CoreAudioDeviceListWatcher(),
+            logger: FileActivationLogger.shared
         )
         coordinator.start()
         autoActivation = coordinator
