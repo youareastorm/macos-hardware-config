@@ -111,7 +111,7 @@ A step that fails is reported in the menu without blocking the others.
 On activation, StudioSwitch:
 
 - **does nothing** if UAD Console already shows the profile's session (exact name, ignoring case and the unsaved-changes `*`);
-- **switches** it through UAD Console's own File > Open menu (System Events UI scripting) if another session is open: it waits for the Open panel (it can take several seconds to appear), uses "Go to Folder" to type the path, waits for the panel to close, and confirms the window title shows the new session — about 8 s;
+- **switches** it through UAD Console's own File > Open menu (System Events UI scripting) if another session is open: it waits for the Open panel (it can take several seconds to appear), uses "Go to Folder" to type the path, waits for the panel to close, and confirms the load in UAD Console's own log (`Hide Progress Dialog` in `~/Library/Logs/Universal Audio/UAD Console_*.txt`) — about 8 s. The window title isn't used for this: read through System Events it can stay stale after a load (seen after a reboot: "empty home" loaded, title still "home guit vox*"), which made StudioSwitch report a false failure;
 - **cold start**: if UAD Console isn't running, launches it, waits for its session window (up to 40 s), then switches the same way — about 13 s.
 
 Any step that doesn't happen raises an error shown in orange in the menu, instead of failing silently. Things found on real hardware (UAD Console 1.3.1) that shaped this:

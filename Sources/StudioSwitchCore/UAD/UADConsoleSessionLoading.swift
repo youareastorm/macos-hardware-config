@@ -1,5 +1,6 @@
 public enum UADConsoleSessionLoaderError: Error, Equatable {
     case appleScriptFailed(String)
+    case sessionNotLoaded(String)
 }
 
 public protocol UADConsoleSessionLoading {

@@ -32,15 +32,26 @@ import Foundation
 /// open a few seconds later, instead of assuming the four keystrokes landed correctly.
 public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading {
     private let processName: String
+    private let runScript: (String) -> String?
+    private let logWatcher: UADConsoleLogWatching
+    private static let loadTimeout: TimeInterval = 20
 
-    public init(processName: String = "UAD Console") {
+    public convenience init(processName: String = "UAD Console") {
+        self.init(processName: processName, runScript: Self.runOnMainThread, logWatcher: FileUADConsoleLogWatcher())
+    }
+
+    /// `runScript` returns the AppleScript error message, or nil on success.
+    init(processName: String = "UAD Console", runScript: @escaping (String) -> String?, logWatcher: UADConsoleLogWatching) {
         self.processName = processName
+        self.runScript = runScript
+        self.logWatcher = logWatcher
     }
 
     private static let openPanelTitle = "Choose a session file to open:"
 
     public func loadSession(atPath path: String, discardingUnsavedChanges: Bool) throws {
         let sessionName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+        let mark = logWatcher.mark()
         let source = """
         tell application "System Events"
             tell process "\(Self.escaped(processName))"
@@ -70,21 +81,23 @@ public final class AppleScriptUADConsoleSessionLoader: UADConsoleSessionLoading 
                     set waited to waited + 0.25
                     if waited > 15 then error "le panneau d'ouverture ne s'est pas fermé"
                 end repeat
-
-                set waited to 0
-                repeat until ((count of (windows whose name begins with "UAD Console:" and name contains "\(Self.escaped(sessionName))")) > 0)
-                    delay 0.25
-                    set waited to waited + 0.25
-                    if waited > 20 then error "la session \(Self.escaped(sessionName)) ne s'est pas chargée"
-                end repeat
             end tell
         end tell
         """
 
-        let (_, error) = runAppleScriptOnMainThread(source)
-        if let error {
-            throw UADConsoleSessionLoaderError.appleScriptFailed("\(error)")
+        if let message = runScript(source) {
+            throw UADConsoleSessionLoaderError.appleScriptFailed(message)
         }
+        // Confirmed from UAD Console's own log, not the window title (see FileUADConsoleLogWatcher).
+        guard logWatcher.waitForLine(containing: "Hide Progress Dialog", after: mark, timeout: Self.loadTimeout) else {
+            throw UADConsoleSessionLoaderError.sessionNotLoaded(sessionName)
+        }
+    }
+
+    private static func runOnMainThread(_ source: String) -> String? {
+        let (_, error) = runAppleScriptOnMainThread(source)
+        guard let error else { return nil }
+        return error["NSAppleScriptErrorMessage"] as? String ?? "\(error)"
     }
 
     /// With unsaved changes, File > Open... first shows UAD Console's own "save changes?" question
