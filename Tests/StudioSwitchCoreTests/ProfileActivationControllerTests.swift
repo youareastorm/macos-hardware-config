@@ -139,7 +139,9 @@ private final class PairApplyingConfigurator: AudioMIDIConfiguring {
     func setDefaultInputDevice(named deviceName: String) throws {}
     func setDefaultOutputDevice(named deviceName: String) throws {}
     func enableIACDriverIfPresent() throws {}
+    private(set) var applyCount = 0
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
+        applyCount += 1
         status.current = [pair.firstName, pair.secondName]
     }
     func enableMIDIDevice(named deviceName: String) throws {}
@@ -462,7 +464,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertEqual(offline.hideCalls, 0)
     }
 
-    func test_activate_logsTheChannelPairBeforeAfterAndOnceTheUADStepsAreDone() {
+    private func pairResetScenario() -> (ChangingChannelStatus, PairApplyingConfigurator, RecordingLogger, ProfileActivationController, Profile) {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
         let status = ChangingChannelStatus()
@@ -477,13 +479,41 @@ final class ProfileActivationControllerTests: XCTestCase {
             detector: detector, configurator: configurator, channelStatus: status,
             uadConsole: PairResettingConsole(status: status), logger: logger
         )
+        return (status, configurator, logger, controller, pairProfile)
+    }
+
+    func test_activate_reappliesThePairWhenLaunchingUADConsoleResetIt() {
+        let (status, configurator, _, controller, pairProfile) = pairResetScenario()
+
+        let result = controller.activate(pairProfile)
+
+        XCTAssertEqual(status.current, ["VIRTUAL 1", "VIRTUAL 2"])
+        XCTAssertEqual(configurator.applyCount, 2)
+        XCTAssertNil(result.channelPairError)
+    }
+
+    func test_activate_logsThePairAtEachStageAndTheReapply() {
+        let (_, _, logger, controller, pairProfile) = pairResetScenario()
 
         _ = controller.activate(pairProfile)
 
         let joined = logger.lines.joined(separator: "\n")
         XCTAssertTrue(joined.contains("paire avant : MON L / MON R"), joined)
         XCTAssertTrue(joined.contains("paire après : VIRTUAL 1 / VIRTUAL 2"), joined)
-        XCTAssertTrue(joined.contains("paire à la fin : MON L / MON R"), joined)
+        XCTAssertTrue(joined.contains("paire après UAD : MON L / MON R"), joined)
+        XCTAssertTrue(joined.contains("Paire de sortie remise après UAD Console"), joined)
+        XCTAssertTrue(joined.contains("paire à la fin : VIRTUAL 1 / VIRTUAL 2"), joined)
+    }
+
+    func test_activate_doesNotReapplyThePairWhenItStayed() {
+        let (_, configurator, _, _, pairProfile) = pairResetScenario()
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: configurator.status, logger: RecordingLogger())
+
+        _ = controller.activate(pairProfile)
+
+        XCTAssertEqual(configurator.applyCount, 1)
     }
 
     func test_activate_logsEachStepAndItsError() {

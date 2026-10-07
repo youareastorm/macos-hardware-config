@@ -102,9 +102,22 @@ public final class ProfileActivationController {
             logger.log("  moteur UA après : \(describe { Self.describe(try uadMixer.currentState()) })")
         }
 
-        // Re-read once everything else ran: launching UAD Console restarts the UA Mixer Engine,
-        // which may reset the active pair set earlier.
-        if profile.expectedOutputChannelNames.count == 2 {
+        // Seen on real hardware (2026-10-07, after a reboot): the pair set above was back to
+        // MON L / MON R once UAD Console had started — its launch restarts the UA Mixer Engine.
+        // So it's checked again after the UAD steps and put back if it moved.
+        if profile.expectedOutputChannelNames.count == 2, channelPairError == nil {
+            let current = channelStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName)
+            logger.log("  paire après UAD : \(current.map { $0.joined(separator: " / ") } ?? "illisible")")
+            let moved = current.map { names in
+                names.count != 2 || !zip(names, profile.expectedOutputChannelNames).allSatisfy {
+                    $0.caseInsensitiveCompare($1) == .orderedSame
+                }
+            } ?? false
+            if moved {
+                channelPairError = step("Paire de sortie remise après UAD Console") {
+                    if let error = applyOutputChannelPair(for: profile) { throw ActivationStepError(message: error) }
+                }
+            }
             logPair("à la fin", profile)
         }
         logger.log("Activation de \(profile.name) terminée en \(Self.seconds(since: started))")
