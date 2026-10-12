@@ -40,7 +40,9 @@ PLIST
 # Accessibility permission to that certificate, so it survives rebuilds. Ad-hoc signing ("-")
 # gives every build a new identity and the permission silently stops working after each one.
 SIGNING_IDENTITY="${STUDIOSWITCH_SIGNING_IDENTITY:-StudioSwitch Dev}"
-if security find-identity -v -p codesigning | grep -q "\"${SIGNING_IDENTITY}\""; then
+# Without -v: a self-signed certificate is listed as not trusted (CSSMERR_TP_NOT_TRUSTED), yet
+# codesign signs with it fine, and that's all the Accessibility permission needs.
+if security find-identity -p codesigning | grep -q "\"${SIGNING_IDENTITY}\""; then
     codesign --force --deep --sign "${SIGNING_IDENTITY}" "${APP_BUNDLE}"
     echo "Signed with \"${SIGNING_IDENTITY}\"."
 else
