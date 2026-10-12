@@ -10,6 +10,8 @@ swift build -c release --product StudioSwitchApp
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 cp "${BUILD_DIR}/StudioSwitchApp" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+mkdir -p "${APP_BUNDLE}/Contents/Resources"
+cp -R Resources/DAWIcons "${APP_BUNDLE}/Contents/Resources/"
 
 cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

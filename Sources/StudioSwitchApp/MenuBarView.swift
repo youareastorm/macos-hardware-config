@@ -42,6 +42,7 @@ struct MenuBarView: View {
     private let appLauncher: AppLaunching = WorkspaceAppLauncher()
 
     private static let pickerWidth: CGFloat = 150
+    private static let dawIconSize: CGFloat = 36
     private static let audioMIDISetupBundleID = "com.apple.audio.AudioMIDISetup"
 
     var body: some View {
@@ -68,13 +69,25 @@ struct MenuBarView: View {
                 healthIndicators
             }
 
-            if let activeProfile {
+            // The profile picked by a click, or else the one matching the connected hardware, so
+            // the DAWs are there after an automatic activation too.
+            if let dawProfile = activeProfile ?? healthProfile, !dawProfile.daws.isEmpty {
                 Divider()
-                ForEach(Array(activeProfile.daws.enumerated()), id: \.offset) { _, daw in
-                    Button(daw.name) {
-                        launchDAW(daw)
+                HStack(spacing: 10) {
+                    ForEach(Array(dawProfile.daws.enumerated()), id: \.offset) { _, daw in
+                        Button {
+                            launchDAW(daw)
+                        } label: {
+                            Image(nsImage: Self.icon(for: daw))
+                                .resizable()
+                                .interpolation(.high)
+                                .frame(width: Self.dawIconSize, height: Self.dawIconSize)
+                        }
+                        .buttonStyle(.plain)
+                        .help(daw.name)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 if let dawLaunchMessage {
                     Text(dawLaunchMessage).foregroundStyle(.orange)
                 }
@@ -227,6 +240,20 @@ struct MenuBarView: View {
         } catch {
             saveError = "\(error)"
         }
+    }
+
+    /// The icon shipped in the bundle (`Contents/Resources/DAWIcons/daw-<icon>.png`, the same artwork
+    /// as Geoff), else the installed application's own icon.
+    private static func icon(for daw: DAWEntry) -> NSImage {
+        if let name = daw.icon,
+           let url = Bundle.main.url(forResource: "daw-\(name)", withExtension: "png", subdirectory: "DAWIcons"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: daw.bundleID) {
+            return NSWorkspace.shared.icon(forFile: appURL.path)
+        }
+        return NSImage(systemSymbolName: "music.note", accessibilityDescription: daw.name) ?? NSImage()
     }
 
     private func launchDAW(_ daw: DAWEntry) {

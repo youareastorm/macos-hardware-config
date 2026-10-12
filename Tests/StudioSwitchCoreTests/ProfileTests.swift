@@ -105,4 +105,19 @@ final class ProfileTests: XCTestCase {
         XCTAssertNil(decoded.expectedMonitorLevel)
         XCTAssertFalse(decoded.hideUADOfflineDevices)
     }
+
+    func test_dawEntry_decodesItsIconWhenPresent() throws {
+        let json = #"{"name": "Cubase 15", "bundleID": "com.steinberg.cubase15", "icon": "cubase"}"#.data(using: .utf8)!
+
+        let daw = try JSONDecoder().decode(DAWEntry.self, from: json)
+
+        XCTAssertEqual(daw.icon, "cubase")
+        XCTAssertNil(daw.templatePath)
+    }
+
+    func test_dawEntry_iconIsOptional() throws {
+        let json = #"{"name": "Logic Pro", "bundleID": "com.apple.logic10"}"#.data(using: .utf8)!
+
+        XCTAssertNil(try JSONDecoder().decode(DAWEntry.self, from: json).icon)
+    }
 }

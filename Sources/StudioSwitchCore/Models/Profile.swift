@@ -5,12 +5,16 @@ public struct DAWEntry: Codable, Equatable {
     public let bundleID: String
     public let appPath: String?
     public let templatePath: String?
+    /// Name of the icon shipped in the app bundle (`Contents/Resources/DAWIcons/daw-<icon>.png`),
+    /// e.g. `"cubase"`. Without it the menu falls back to the application's own icon.
+    public let icon: String?
 
-    public init(name: String, bundleID: String, appPath: String? = nil, templatePath: String?) {
+    public init(name: String, bundleID: String, appPath: String? = nil, templatePath: String?, icon: String? = nil) {
         self.name = name
         self.bundleID = bundleID
         self.appPath = appPath
         self.templatePath = templatePath
+        self.icon = icon
     }
 }
 

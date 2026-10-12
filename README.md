@@ -73,7 +73,7 @@ Optional fields:
 - `expectedOutputDeviceNames`: the device(s) the Mac's audio *output* should route to, separately from `audioDeviceName` (which then only handles input). One entry selects that device as the default output; two or more (e.g. `["Virtuel 1", "Virtuel 2"]`) make StudioSwitch create and select a combined Multi-Output Device on first activation, and reuse it afterwards. Omit or leave `[]` to keep `audioDeviceName` as both input and output.
 - `expectedSampleRate`: sample rate in Hz the interface should be running at. **Only checked, not applied**: a mismatch shows a warning on "Interface audio".
 - `useIACDriver`: enable the IAC Driver on activation (not yet verified on real hardware).
-- `daws`: the DAWs offered in the menu (`name`, `bundleID`, optional `appPath` and `templatePath` — a project/template file to open the DAW with).
+- `daws`: the DAWs offered in the menu, shown as a row of icons (`name`, `bundleID`, optional `appPath`, `templatePath` — a project/template file to open the DAW with — and `icon`: `protools`, `cubase`, `live`, `logic` or `bitwig`, the artwork from the Geoff project shipped in `Resources/DAWIcons`; without it the application's own icon is used). The row appears as soon as a profile matches the connected hardware; hover shows the name, a click launches the DAW.
 
 - `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`).
 - `expectedClockSource`: the clock UAD Console should be on (e.g. `"Internal"`), as offered by the UA Mixer Engine for the connected unit. Omit to leave the clock alone.
