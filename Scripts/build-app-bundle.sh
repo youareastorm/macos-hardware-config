@@ -36,6 +36,16 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "${APP_BUNDLE}"
+# Sign with the local "StudioSwitch Dev" certificate when it's in the keychain: macOS then ties the
+# Accessibility permission to that certificate, so it survives rebuilds. Ad-hoc signing ("-")
+# gives every build a new identity and the permission silently stops working after each one.
+SIGNING_IDENTITY="${STUDIOSWITCH_SIGNING_IDENTITY:-StudioSwitch Dev}"
+if security find-identity -v -p codesigning | grep -q "\"${SIGNING_IDENTITY}\""; then
+    codesign --force --deep --sign "${SIGNING_IDENTITY}" "${APP_BUNDLE}"
+    echo "Signed with \"${SIGNING_IDENTITY}\"."
+else
+    codesign --force --deep --sign - "${APP_BUNDLE}"
+    echo "Signing identity \"${SIGNING_IDENTITY}\" not found: ad-hoc signed (Accessibility will need re-granting after this build)."
+fi
 
 echo "Built ${APP_BUNDLE}. Move it to /Applications and add it to Login Items to run it automatically."

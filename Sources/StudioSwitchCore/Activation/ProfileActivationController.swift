@@ -9,6 +9,7 @@ public struct ProfileActivationResult: Equatable {
     public let uadConsoleError: String?
     public var uadOfflineDevicesError: String? = nil
     public var uadMixerError: String? = nil
+    public var uadConsoleWindowError: String? = nil
 }
 
 public final class ProfileActivationController {
@@ -19,6 +20,7 @@ public final class ProfileActivationController {
     private let uadConsole: UADConsoleSessionEnsuring?
     private let uadMixer: UAMixerControlling?
     private let uadOfflineDevices: UADConsoleOfflineDevicesControlling?
+    private let uadConsoleWindow: UADConsoleWindowPlacing?
     private let logger: ActivationLogging
 
     public init(
@@ -29,6 +31,7 @@ public final class ProfileActivationController {
         uadConsole: UADConsoleSessionEnsuring? = nil,
         uadMixer: UAMixerControlling? = nil,
         uadOfflineDevices: UADConsoleOfflineDevicesControlling? = nil,
+        uadConsoleWindow: UADConsoleWindowPlacing? = nil,
         logger: ActivationLogging = NoActivationLogger()
     ) {
         self.detector = detector
@@ -38,6 +41,7 @@ public final class ProfileActivationController {
         self.uadConsole = uadConsole
         self.uadMixer = uadMixer
         self.uadOfflineDevices = uadOfflineDevices
+        self.uadConsoleWindow = uadConsoleWindow
         self.logger = logger
     }
 
@@ -83,6 +87,21 @@ public final class ProfileActivationController {
             try uadConsole?.ensureSessionOpen(atPath: profile.uadConsoleSession)
         }
 
+        // Only once the session step succeeded: the window may not exist otherwise.
+        var uadConsoleWindowError: String?
+        if uadConsoleError == nil, let uadConsoleWindow {
+            var outcome: UADConsoleWindowOutcome?
+            uadConsoleWindowError = step("Fenêtre UAD Console → écran du Mac") {
+                outcome = try uadConsoleWindow.ensureOnBuiltInDisplay()
+            }
+            switch outcome {
+            case .alreadyThere: logger.log("  Fenêtre UAD Console : déjà sur l'écran du Mac")
+            case .moved(let from, let to): logger.log("  Fenêtre UAD Console : déplacée de \(from) à \(to)")
+            case .noBuiltInDisplay: logger.log("  Fenêtre UAD Console : écran du Mac inactif, laissée en place")
+            case nil: break
+            }
+        }
+
         // After the session: hiding offline units needs UAD Console running, and the mixer
         // settings go last so a freshly loaded session can't override them.
         var uadOfflineDevicesError: String?
@@ -122,7 +141,7 @@ public final class ProfileActivationController {
         }
         logger.log("Activation de \(profile.name) terminée en \(Self.seconds(since: started))")
 
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError)
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError, uadConsoleWindowError: uadConsoleWindowError)
     }
 
     /// Runs one activation step, logs its outcome and duration, and returns its error message.

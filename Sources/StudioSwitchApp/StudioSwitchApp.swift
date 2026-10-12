@@ -26,6 +26,7 @@ struct StudioSwitchApp: App {
                 uadConsole: UADConsoleController(),
                 uadMixer: UAMixerEngineController(),
                 uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController(),
+                uadConsoleWindow: UADConsoleWindowPlacer(),
                 logger: FileActivationLogger.shared
             ),
             isEnabled: { AutoActivationSetting.isEnabled },

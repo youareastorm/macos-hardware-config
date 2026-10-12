@@ -153,6 +153,17 @@ private final class PairResettingConsole: UADConsoleSessionEnsuring {
     func ensureSessionOpen(atPath path: String) throws { status.current = ["MON L", "MON R"] }
 }
 
+private final class MockWindowPlacer: UADConsoleWindowPlacing {
+    var outcome: UADConsoleWindowOutcome = .alreadyThere
+    var error: Error?
+    private(set) var calls = 0
+    func ensureOnBuiltInDisplay() throws -> UADConsoleWindowOutcome {
+        calls += 1
+        if let error { throw error }
+        return outcome
+    }
+}
+
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
@@ -537,5 +548,45 @@ final class ProfileActivationControllerTests: XCTestCase {
         _ = controller.activate(profile)
 
         XCTAssertTrue(logger.lines.contains { $0.contains("non détecté") }, "\(logger.lines)")
+    }
+
+    func test_activate_putsTheConsoleWindowOnTheBuiltInDisplayAfterTheSession() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let placer = MockWindowPlacer()
+        let logger = RecordingLogger()
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: MockUADConsole(), uadConsoleWindow: placer, logger: logger)
+
+        let result = controller.activate(profile)
+
+        XCTAssertEqual(placer.calls, 1)
+        XCTAssertNil(result.uadConsoleWindowError)
+        XCTAssertTrue(logger.lines.contains { $0.contains("Fenêtre UAD Console") && $0.contains("déjà sur l'écran du Mac") }, "\(logger.lines)")
+    }
+
+    func test_activate_skipsTheWindowWhenTheSessionStepFailed() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let console = MockUADConsole()
+        console.error = TestError.boom
+        let placer = MockWindowPlacer()
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: console, uadConsoleWindow: placer)
+
+        _ = controller.activate(profile)
+
+        XCTAssertEqual(placer.calls, 0)
+    }
+
+    func test_activate_reportsAWindowErrorWithoutFailingActivation() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let placer = MockWindowPlacer()
+        placer.error = TestError.boom
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: MockUADConsole(), uadConsoleWindow: placer)
+
+        let result = controller.activate(profile)
+
+        XCTAssertNotNil(result.uadConsoleWindowError)
+        XCTAssertTrue(result.hasError)
     }
 }

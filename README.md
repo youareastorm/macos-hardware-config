@@ -45,7 +45,9 @@ Driving UAD Console needs two macOS permissions for StudioSwitch:
 tccutil reset Accessibility com.simonrenard.studioswitch
 ```
 
-then add the app again with "+" in Privacy & Security → Accessibility, and relaunch StudioSwitch (removing the permission quits the app). Without this, UAD Console is launched but its session never switches. A stable signing identity (a local code-signing certificate) would remove this step; not set up yet.
+then add the app again with "+" in Privacy & Security → Accessibility, and relaunch StudioSwitch (removing the permission quits the app). Without this, UAD Console is launched but its session never switches.
+
+To avoid this, create a local code-signing certificate named **StudioSwitch Dev** (Keychain Access → Certificate Assistant → Create a Certificate…, identity type "Self-Signed Root", certificate type "Code Signing"). `Scripts/build-app-bundle.sh` signs with it when it's in the keychain (another name can be given with `STUDIOSWITCH_SIGNING_IDENTITY`) and falls back to ad-hoc signing otherwise, saying so. The permission is then tied to the certificate and should survive rebuilds (grant it once more after the first signed build).
 
 ### Configuration
 
@@ -102,6 +104,7 @@ Clicking a profile in the menu, or an automatic activation, does the same thing:
 - With `expectedOutputChannelNames`, writes that channel pair as the interface's active stereo output.
 - Enables the IAC Driver when `useIACDriver` is set.
 - Makes sure UAD Console runs with `uadConsoleSession` open (details below).
+- Puts UAD Console's main window on the MacBook's own screen, whichever display macOS marks as main: if the window isn't entirely on the built-in display it's moved to its top-left corner (shrunk only if bigger than the screen); a window already there keeps its exact spot. Skipped when the built-in display is off (lid closed) or the session step failed.
 - Then, with `hideUADOfflineDevices`, unchecks View > Offline Devices if needed, and with `expectedClockSource` / `expectedMonitorLevel`, sets the clock and the monitor level (details below). These come after the session so loading it can't override them.
 
 A step that fails is reported in the menu without blocking the others.

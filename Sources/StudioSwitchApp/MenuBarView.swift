@@ -27,6 +27,7 @@ struct MenuBarView: View {
         uadConsole: UADConsoleController(),
         uadMixer: UAMixerEngineController(),
         uadOfflineDevices: AppleScriptUADConsoleOfflineDevicesController(),
+        uadConsoleWindow: UADConsoleWindowPlacer(),
         logger: FileActivationLogger.shared
     )
     private let dawLauncher = DAWLauncher()
