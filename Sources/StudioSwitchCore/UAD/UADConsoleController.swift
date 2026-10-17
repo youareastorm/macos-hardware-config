@@ -1,9 +1,5 @@
 import Foundation
 
-public protocol UADSessionOpening {
-    func openSession(atPath path: String) throws
-}
-
 public protocol UADConsoleSessionEnsuring {
     /// Makes sure UAD Console is running with the given session open: launches it with that
     /// session when it isn't running, loads the session when a different one is open, and does
@@ -19,7 +15,7 @@ public enum UADConsoleControllerError: Error, Equatable {
     case consoleWindowNeverAppeared
 }
 
-public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEnsuring {
+public final class UADConsoleController: UADConsoleSessionEnsuring {
     public static let defaultConsoleAppPath = "/Applications/Universal Audio/UAD Console.app"
     public static let defaultConsoleBundleID = "com.uaudio.console3"
 
@@ -112,21 +108,4 @@ public final class UADConsoleController: UADSessionOpening, UADConsoleSessionEns
         ((path as NSString).lastPathComponent as NSString).deletingPathExtension
     }
 
-    public func openSession(atPath path: String) throws {
-        let expandedPath = (path as NSString).expandingTildeInPath
-        guard fileManager.fileExists(atPath: expandedPath) else {
-            throw UADConsoleControllerError.sessionFileNotFound(expandedPath)
-        }
-        guard fileManager.fileExists(atPath: consoleAppPath) else {
-            throw UADConsoleControllerError.consoleAppNotFound(consoleAppPath)
-        }
-
-        if runningChecker.isRunning(bundleID: consoleBundleID) {
-            // UAD Console is already open with some session — a plain file-open is silently
-            // ignored (see AppleScriptUADConsoleSessionLoader), so drive its File > Open... menu.
-            try sessionLoader.loadSession(atPath: expandedPath, discardingUnsavedChanges: hasUnsavedChanges())
-        } else {
-            try appLauncher.open(fileURL: URL(fileURLWithPath: expandedPath), withApplicationAt: URL(fileURLWithPath: consoleAppPath))
-        }
-    }
 }

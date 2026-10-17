@@ -30,10 +30,9 @@ final class ProfileTests: XCTestCase {
         XCTAssertNil(decoded.profiles[0].daws[0].appPath)
         XCTAssertNil(decoded.profiles[0].daws[0].templatePath)
         XCTAssertNil(decoded.profiles[0].expectedSampleRate)
-        XCTAssertEqual(decoded.profiles[0].expectedExternalDiskNames, [])
     }
 
-    func test_decodesExpectedSampleRateAndExternalDisksWhenPresent() throws {
+    func test_decodesExpectedSampleRateWhenPresent() throws {
         let json = """
         {
           "name": "Studio",
@@ -42,15 +41,13 @@ final class ProfileTests: XCTestCase {
           "uadConsoleSession": "s",
           "useIACDriver": false,
           "daws": [],
-          "expectedSampleRate": 96000,
-          "expectedExternalDiskNames": ["Backup", "Samples"]
+          "expectedSampleRate": 96000
         }
         """.data(using: .utf8)!
 
         let decoded = try JSONDecoder().decode(Profile.self, from: json)
 
         XCTAssertEqual(decoded.expectedSampleRate, 96000)
-        XCTAssertEqual(decoded.expectedExternalDiskNames, ["Backup", "Samples"])
     }
 
     func test_roundTripsThroughEncodingAndDecoding() throws {
@@ -61,8 +58,7 @@ final class ProfileTests: XCTestCase {
             uadConsoleSession: "s",
             useIACDriver: true,
             daws: [DAWEntry(name: "Pro Tools", bundleID: "com.avid.ProTools", templatePath: nil)],
-            expectedSampleRate: 96000,
-            expectedExternalDiskNames: ["Backup"]
+            expectedSampleRate: 96000
         )
 
         let data = try JSONEncoder().encode(profile)

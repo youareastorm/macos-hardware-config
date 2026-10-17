@@ -26,7 +26,6 @@ struct NewProfileFormView: View {
     @State private var selectedDAWNames: Set<String> = []
     @State private var detectedModels: [String] = []
     @State private var expectedSampleRate = ""
-    @State private var expectedExternalDiskNames = ""
     @State private var expectedOutputDeviceNames = ""
     @State private var expectedOutputChannelNames = ""
 
@@ -59,7 +58,6 @@ struct NewProfileFormView: View {
             TextField("Session UAD Console (.uadmix)", text: $uadConsoleSession)
             Toggle("Activer IAC Driver", isOn: $useIACDriver)
             TextField("Fréquence attendue en Hz (optionnel)", text: $expectedSampleRate)
-            TextField("Disques externes attendus (séparés par des virgules)", text: $expectedExternalDiskNames)
             TextField("Sorties audio attendues (séparées par des virgules, ex. Virtuel 1, Virtuel 2)", text: $expectedOutputDeviceNames)
             TextField("Canaux de sortie attendus (2, séparés par une virgule, ex. VIRTUAL 1, VIRTUAL 2)", text: $expectedOutputChannelNames)
 
@@ -97,7 +95,6 @@ struct NewProfileFormView: View {
             useIACDriver: useIACDriver,
             daws: daws,
             expectedSampleRate: Double(expectedSampleRate),
-            expectedExternalDiskNames: Self.parseCommaList(expectedExternalDiskNames),
             expectedOutputDeviceNames: Self.parseCommaList(expectedOutputDeviceNames),
             expectedOutputChannelNames: Self.parseCommaList(expectedOutputChannelNames)
         ))

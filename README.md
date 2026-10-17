@@ -82,8 +82,6 @@ Optional fields:
 - `expectedMonitorLevel`: UAD Console's MONITOR level in dB, from -96 to 0 (e.g. `-35` at home, `0` at the studio). Set once on activation; you can turn it afterwards. Omit to leave it alone.
 - `hideUADOfflineDevices`: `true` to keep UAD Console's View > Offline Devices unchecked, so units that aren't connected (e.g. the studio's Apollo x8 at home) aren't shown after the connected unit's channels.
 
-`expectedUADConsoleSessionNames` and `expectedExternalDiskNames` are still part of the file format but currently unused (see "What was removed").
-
 ### Automatic switching
 
 StudioSwitch activates the matching profile on its own, without a click:
@@ -160,10 +158,7 @@ These three rows have no dropdown.
 
 ### What was removed
 
-The menu used to also show UAD Console, MIDI, USB power and external-disk rows. They were taken out to focus on audio configuration; the code mostly remains but is no longer wired in.
-
-- **UAD Console row**: the health row and its session picker are gone from the menu; UAD Console is now handled by activation only (see above). The per-profile whitelist of accepted sessions (`expectedUADConsoleSessionNames`) is unused.
-- **USB topology, wattage and power-fault detection**: see `docs/usb-diagnostics.md` and `Scripts/usb-topology.py`. The IOKit disconnect detector, the `system_profiler` power provider and the disk inspector remain in the codebase, unused.
+The menu used to also show UAD Console, MIDI, USB power and external-disk rows, plus a UAD session picker. They were taken out to focus on audio configuration, and their code was deleted (it's in the git history). The USB investigation is documented in `docs/usb-diagnostics.md`.
 
 ### Next try (studio)
 

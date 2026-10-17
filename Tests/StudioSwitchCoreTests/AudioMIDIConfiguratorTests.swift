@@ -106,25 +106,6 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         }
     }
 
-    func test_enableMIDIDevice_enablesNamedDevice() throws {
-        let midiProvider = MockMIDIDeviceProvider(present: false)
-        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
-
-        try configurator.enableMIDIDevice(named: "Oxygen 49")
-
-        XCTAssertEqual(midiProvider.enabledDeviceNames, ["Oxygen 49"])
-    }
-
-    func test_enableMIDIDevice_throwsWhenDeviceNotFound() {
-        let midiProvider = MockMIDIDeviceProvider(present: false)
-        midiProvider.enableDeviceError = CoreMIDIError.deviceNotFound("Missing")
-        let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: midiProvider)
-
-        XCTAssertThrowsError(try configurator.enableMIDIDevice(named: "Missing")) { error in
-            XCTAssertEqual(error as? CoreMIDIError, .deviceNotFound("Missing"))
-        }
-    }
-
     func test_setPreferredOutputChannelPair_throwsWhenDeviceNotFound() {
         let configurator = AudioMIDIConfigurator(deviceProvider: MockAudioDeviceProvider(), midiProvider: MockMIDIDeviceProvider(present: false))
         let pair = ChannelPair(firstChannel: 1, secondChannel: 2, firstName: "Virtual 1", secondName: "Virtual 2")

@@ -26,7 +26,6 @@ public struct Profile: Codable, Equatable {
     public let useIACDriver: Bool
     public let daws: [DAWEntry]
     public let expectedSampleRate: Double?
-    public let expectedExternalDiskNames: [String]
     public let expectedOutputDeviceNames: [String]
     /// Names of the two channels `audioDeviceName` should have as its default output pair, e.g.
     /// `["VIRTUAL 1", "VIRTUAL 2"]` on a UA Apollo routed to its software-return channels instead
@@ -34,12 +33,6 @@ public struct Profile: Codable, Equatable {
     /// CoreAudio devices — this checks a channel pair *within* a single device. Empty means the
     /// profile doesn't care which channel pair is active.
     public let expectedOutputChannelNames: [String]
-    /// Session names (matched the same loose, case-insensitive-substring way `uadConsoleSession`
-    /// alone used to be) that all count as a healthy UAD Console state for this profile — e.g. a
-    /// Home profile might accept several different session files depending on what's being worked
-    /// on, not just the one `uadConsoleSession` opens by default. Empty means fall back to matching
-    /// `uadConsoleSession` alone, the original single-session behavior.
-    public let expectedUADConsoleSessionNames: [String]
     /// Clock source the UA Mixer Engine should be on (e.g. `"Internal"`), as listed in its
     /// `ClockSource` values. `nil` leaves the clock alone.
     public let expectedClockSource: String?
@@ -56,10 +49,8 @@ public struct Profile: Codable, Equatable {
         useIACDriver: Bool,
         daws: [DAWEntry],
         expectedSampleRate: Double? = nil,
-        expectedExternalDiskNames: [String] = [],
         expectedOutputDeviceNames: [String] = [],
         expectedOutputChannelNames: [String] = [],
-        expectedUADConsoleSessionNames: [String] = [],
         expectedClockSource: String? = nil,
         expectedMonitorLevel: Double? = nil,
         hideUADOfflineDevices: Bool = false
@@ -71,10 +62,8 @@ public struct Profile: Codable, Equatable {
         self.useIACDriver = useIACDriver
         self.daws = daws
         self.expectedSampleRate = expectedSampleRate
-        self.expectedExternalDiskNames = expectedExternalDiskNames
         self.expectedOutputDeviceNames = expectedOutputDeviceNames
         self.expectedOutputChannelNames = expectedOutputChannelNames
-        self.expectedUADConsoleSessionNames = expectedUADConsoleSessionNames
         self.expectedClockSource = expectedClockSource
         self.expectedMonitorLevel = expectedMonitorLevel
         self.hideUADOfflineDevices = hideUADOfflineDevices
@@ -89,10 +78,8 @@ public struct Profile: Codable, Equatable {
         useIACDriver = try container.decode(Bool.self, forKey: .useIACDriver)
         daws = try container.decode([DAWEntry].self, forKey: .daws)
         expectedSampleRate = try container.decodeIfPresent(Double.self, forKey: .expectedSampleRate)
-        expectedExternalDiskNames = try container.decodeIfPresent([String].self, forKey: .expectedExternalDiskNames) ?? []
         expectedOutputDeviceNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputDeviceNames) ?? []
         expectedOutputChannelNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputChannelNames) ?? []
-        expectedUADConsoleSessionNames = try container.decodeIfPresent([String].self, forKey: .expectedUADConsoleSessionNames) ?? []
         expectedClockSource = try container.decodeIfPresent(String.self, forKey: .expectedClockSource)
         expectedMonitorLevel = try container.decodeIfPresent(Double.self, forKey: .expectedMonitorLevel)
         hideUADOfflineDevices = try container.decodeIfPresent(Bool.self, forKey: .hideUADOfflineDevices) ?? false

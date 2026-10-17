@@ -6,7 +6,6 @@ public protocol AudioMIDIConfiguring {
     func setDefaultOutputDevice(named deviceName: String) throws
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws
     func enableIACDriverIfPresent() throws
-    func enableMIDIDevice(named deviceName: String) throws
 }
 
 public enum AudioMIDIConfiguratorError: Error, Equatable {
@@ -60,10 +59,6 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
 
     public func enableIACDriverIfPresent() throws {
         try midiProvider.enableIACDriver()
-    }
-
-    public func enableMIDIDevice(named deviceName: String) throws {
-        try midiProvider.enableDevice(named: deviceName)
     }
 
     private func resolvedDeviceID(named deviceName: String) throws -> AudioDeviceID {

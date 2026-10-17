@@ -44,8 +44,6 @@ private final class MockConfigurator: AudioMIDIConfiguring {
         setPreferredOutputChannelPairCalls.append((pair, deviceName))
         if let error = setPreferredOutputChannelPairError { throw error }
     }
-
-    func enableMIDIDevice(named deviceName: String) throws {}
 }
 
 private final class MockChannelStatus: AudioDeviceStatusProviding {
@@ -144,7 +142,6 @@ private final class PairApplyingConfigurator: AudioMIDIConfiguring {
         applyCount += 1
         status.current = [pair.firstName, pair.secondName]
     }
-    func enableMIDIDevice(named deviceName: String) throws {}
 }
 
 private final class PairResettingConsole: UADConsoleSessionEnsuring {
