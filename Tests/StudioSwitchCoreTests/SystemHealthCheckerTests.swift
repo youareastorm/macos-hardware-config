@@ -50,7 +50,6 @@ final class SystemHealthCheckerTests: XCTestCase {
         deviceNameMatch: "Apollo Solo",
         audioDeviceName: "Universal Audio Thunderbolt",
         uadConsoleSession: "~/Documents/Universal Audio/Sessions/home guit vox.uadmix",
-        useIACDriver: false,
         daws: []
     )
 
@@ -104,22 +103,6 @@ final class SystemHealthCheckerTests: XCTestCase {
         XCTAssertEqual(results.first(where: { $0.label == "Interface audio" })?.status, .warning("N'est pas la sortie par défaut"))
     }
 
-    func test_audioInterface_ignoresOutputMismatchWhenProfileHasOutputTarget() {
-        let audioStatus = MockAudioDeviceStatusProvider()
-        audioStatus.onlineDeviceNames = ["Universal Audio Thunderbolt"]
-        audioStatus.defaultOutput = "Virtuel 1"
-        audioStatus.defaultInput = "Universal Audio Thunderbolt"
-        let profileWithOutput = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1"]
-        )
-        let checker = makeChecker(audioStatus: audioStatus)
-
-        let results = checker.check(for: profileWithOutput)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Interface audio" })?.status, .ok)
-    }
-
     func test_audioInterface_warnsWhenSampleRateMismatched() {
         let audioStatus = MockAudioDeviceStatusProvider()
         audioStatus.onlineDeviceNames = ["Universal Audio Thunderbolt"]
@@ -128,7 +111,7 @@ final class SystemHealthCheckerTests: XCTestCase {
         audioStatus.defaultInput = "Universal Audio Thunderbolt"
         let profileWithRate = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedSampleRate: 96000
+            uadConsoleSession: "s", daws: [], expectedSampleRate: 96000
         )
         let checker = makeChecker(audioStatus: audioStatus)
 
@@ -151,34 +134,6 @@ final class SystemHealthCheckerTests: XCTestCase {
         let checker = makeChecker(audioStatus: audioStatus)
 
         let results = checker.check(for: profile)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .ok)
-    }
-
-    func test_outputRouting_errorsWhenCurrentOutputDoesNotMatchTarget() {
-        let audioStatus = MockAudioDeviceStatusProvider()
-        audioStatus.defaultOutput = "MacBook Pro Speakers"
-        let profileWithOutput = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
-        )
-        let checker = makeChecker(audioStatus: audioStatus)
-
-        let results = checker.check(for: profileWithOutput)
-
-        XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .error("Sortie actuelle : MacBook Pro Speakers"))
-    }
-
-    func test_outputRouting_okWhenCurrentOutputMatchesCombinedTarget() {
-        let audioStatus = MockAudioDeviceStatusProvider()
-        audioStatus.defaultOutput = "Virtuel 1 + Virtuel 2"
-        let profileWithOutput = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
-        )
-        let checker = makeChecker(audioStatus: audioStatus)
-
-        let results = checker.check(for: profileWithOutput)
 
         XCTAssertEqual(results.first(where: { $0.label == "Sortie HP" })?.status, .ok)
     }
@@ -211,7 +166,7 @@ final class SystemHealthCheckerTests: XCTestCase {
     func test_outputChannels_okWhenCurrentPairMatchesExpectedCaseInsensitively() {
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            uadConsoleSession: "s", daws: [],
             expectedOutputChannelNames: ["Virtual 1", "Virtual 2"]
         )
         let audioStatus = MockAudioDeviceStatusProvider()
@@ -226,7 +181,7 @@ final class SystemHealthCheckerTests: XCTestCase {
     func test_outputChannels_errorsWhenCurrentPairDoesNotMatchExpected() {
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            uadConsoleSession: "s", daws: [],
             expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let audioStatus = MockAudioDeviceStatusProvider()
@@ -241,7 +196,7 @@ final class SystemHealthCheckerTests: XCTestCase {
     func test_outputChannels_errorsWhenChannelsCannotBeRead() {
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [],
+            uadConsoleSession: "s", daws: [],
             expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let checker = makeChecker()
@@ -253,7 +208,7 @@ final class SystemHealthCheckerTests: XCTestCase {
 
     private let uadProfile = Profile(
         name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-        uadConsoleSession: "s", useIACDriver: false, daws: [],
+        uadConsoleSession: "s", daws: [],
         expectedClockSource: "Internal", expectedMonitorLevel: -35, hideUADOfflineDevices: true
     )
 

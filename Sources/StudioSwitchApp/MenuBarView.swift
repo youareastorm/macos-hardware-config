@@ -201,9 +201,7 @@ struct MenuBarView: View {
             switch label {
             case "Interface audio":
                 try audioConfigurator.setDefaultInputDevice(named: value)
-                if profile.outputDeviceTargetName == nil {
-                    try audioConfigurator.setDefaultOutputDevice(named: value)
-                }
+                try audioConfigurator.setDefaultOutputDevice(named: value)
             case "Sortie HP":
                 try audioConfigurator.setDefaultOutputDevice(named: value)
             case "Canaux de sortie":
@@ -362,9 +360,6 @@ struct MenuBarView: View {
             if let error = result.deviceConfigError {
                 Text("Erreur audio : \(error)").foregroundStyle(.orange)
             }
-            if let error = result.outputRoutingError {
-                Text("Erreur sortie audio : \(error)").foregroundStyle(.orange)
-            }
             if let error = result.channelPairError {
                 Text("Erreur canaux de sortie : \(error)").foregroundStyle(.orange)
             }
@@ -377,8 +372,10 @@ struct MenuBarView: View {
             if let error = result.uadMixerError {
                 Text("Erreur clock/volume UAD : \(error)").foregroundStyle(.orange)
             }
-            if result.deviceConfigError == nil && result.outputRoutingError == nil && result.channelPairError == nil && result.uadConsoleError == nil
-                && result.uadOfflineDevicesError == nil && result.uadMixerError == nil {
+            if let error = result.uadConsoleWindowError {
+                Text("Erreur fenêtre UAD Console : \(error)").foregroundStyle(.orange)
+            }
+            if !result.hasError {
                 Text("\(result.profile.name) activé").foregroundStyle(.green)
             }
         }

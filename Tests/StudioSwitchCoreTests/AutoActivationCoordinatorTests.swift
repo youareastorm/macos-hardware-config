@@ -13,7 +13,7 @@ private final class MockActivator: ProfileActivating {
     var deviceConfigError: String?
     func activate(_ profile: Profile) -> ProfileActivationResult {
         activated.append(profile.name)
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: nil, channelPairError: nil, uadConsoleError: nil)
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, channelPairError: nil, uadConsoleError: nil)
     }
 }
 
@@ -33,8 +33,8 @@ private final class MockWatcher: AudioDeviceListWatching {
 }
 
 final class AutoActivationCoordinatorTests: XCTestCase {
-    private let home = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: false, daws: [])
-    private let studio = Profile(name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: false, daws: [])
+    private let home = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", daws: [])
+    private let studio = Profile(name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", daws: [])
 
     private var detector: MockDetector!
     private var activator: MockActivator!

@@ -2,10 +2,10 @@ import XCTest
 @testable import StudioSwitchCore
 
 final class StatusEvaluationTests: XCTestCase {
-    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: false, daws: [])
+    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", daws: [])
 
     private func result(uadConsoleError: String? = nil, uadMixerError: String? = nil) -> ProfileActivationResult {
-        ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: nil, outputRoutingError: nil, channelPairError: nil, uadConsoleError: uadConsoleError, uadMixerError: uadMixerError)
+        ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: nil, channelPairError: nil, uadConsoleError: uadConsoleError, uadMixerError: uadMixerError)
     }
 
     func test_hasError_isFalseWhenEveryStepSucceeded() {

@@ -11,7 +11,6 @@ final class ProfileTests: XCTestCase {
               "deviceNameMatch": "Apollo Solo",
               "audioDeviceName": "Universal Audio Thunderbolt",
               "uadConsoleSession": "~/Documents/Universal Audio/Sessions/home guit vox.uadmix",
-              "useIACDriver": false,
               "daws": [
                 { "name": "Logic Pro", "bundleID": "com.apple.logic10", "appPath": null, "templatePath": null }
               ]
@@ -39,7 +38,6 @@ final class ProfileTests: XCTestCase {
           "deviceNameMatch": "Apollo",
           "audioDeviceName": "Universal Audio Thunderbolt",
           "uadConsoleSession": "s",
-          "useIACDriver": false,
           "daws": [],
           "expectedSampleRate": 96000
         }
@@ -56,7 +54,6 @@ final class ProfileTests: XCTestCase {
             deviceNameMatch: "Apollo",
             audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "s",
-            useIACDriver: true,
             daws: [DAWEntry(name: "Pro Tools", bundleID: "com.avid.ProTools", templatePath: nil)],
             expectedSampleRate: 96000
         )
@@ -74,7 +71,6 @@ final class ProfileTests: XCTestCase {
           "deviceNameMatch": "Thunderbolt 3 Option Card",
           "audioDeviceName": "Universal Audio Thunderbolt",
           "uadConsoleSession": "s",
-          "useIACDriver": false,
           "daws": [],
           "expectedClockSource": "Internal",
           "expectedMonitorLevel": 0,
@@ -92,7 +88,7 @@ final class ProfileTests: XCTestCase {
     func test_uadMixerSettingsDefaultToLeavingThingsAlone() throws {
         let json = """
         {"name": "Home", "deviceNameMatch": "Apollo Solo", "audioDeviceName": "Universal Audio Thunderbolt",
-         "uadConsoleSession": "s", "useIACDriver": false, "daws": []}
+         "uadConsoleSession": "s", "daws": []}
         """.data(using: .utf8)!
 
         let decoded = try JSONDecoder().decode(Profile.self, from: json)

@@ -4,7 +4,6 @@ public struct ProfileActivationResult: Equatable {
     public let profile: Profile
     public let deviceDetected: Bool
     public let deviceConfigError: String?
-    public let outputRoutingError: String?
     public let channelPairError: String?
     public let uadConsoleError: String?
     public var uadOfflineDevicesError: String? = nil
@@ -15,7 +14,6 @@ public struct ProfileActivationResult: Equatable {
 public final class ProfileActivationController {
     private let detector: DeviceDetecting
     private let configurator: AudioMIDIConfiguring
-    private let multiOutputProvider: MultiOutputDeviceProviding
     private let channelStatus: AudioDeviceStatusProviding
     private let uadConsole: UADConsoleSessionEnsuring?
     private let uadMixer: UAMixerControlling?
@@ -26,7 +24,6 @@ public final class ProfileActivationController {
     public init(
         detector: DeviceDetecting,
         configurator: AudioMIDIConfiguring,
-        multiOutputProvider: MultiOutputDeviceProviding = CoreAudioMultiOutputDeviceProvider(),
         channelStatus: AudioDeviceStatusProviding = CoreAudioStatusProvider(),
         uadConsole: UADConsoleSessionEnsuring? = nil,
         uadMixer: UAMixerControlling? = nil,
@@ -36,7 +33,6 @@ public final class ProfileActivationController {
     ) {
         self.detector = detector
         self.configurator = configurator
-        self.multiOutputProvider = multiOutputProvider
         self.channelStatus = channelStatus
         self.uadConsole = uadConsole
         self.uadMixer = uadMixer
@@ -48,30 +44,13 @@ public final class ProfileActivationController {
     public func activate(_ profile: Profile) -> ProfileActivationResult {
         guard let hardwareName = detector.matchingDeviceName(for: profile) else {
             logger.log("Activation de \(profile.name) : \(profile.deviceNameMatch) non détecté")
-            return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, outputRoutingError: nil, channelPairError: nil, uadConsoleError: nil)
+            return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, channelPairError: nil, uadConsoleError: nil)
         }
         let started = Date()
         logger.log("Activation de \(profile.name) (carte : \(hardwareName))")
 
         let deviceConfigError = step("Entrée/sortie par défaut → \(profile.audioDeviceName)") {
-            if profile.outputDeviceTargetName != nil {
-                try configurator.setDefaultInputDevice(named: profile.audioDeviceName)
-            } else {
-                try configurator.setDefaultDevice(named: profile.audioDeviceName)
-            }
-            if profile.useIACDriver {
-                try configurator.enableIACDriverIfPresent()
-            }
-        }
-
-        var outputRoutingError: String?
-        if let target = profile.outputDeviceTargetName {
-            outputRoutingError = step("Sortie → \(target)") {
-                if profile.expectedOutputDeviceNames.count > 1 {
-                    try multiOutputProvider.ensureMultiOutputDevice(named: target, subDeviceNames: profile.expectedOutputDeviceNames)
-                }
-                try configurator.setDefaultOutputDevice(named: target)
-            }
+            try configurator.setDefaultDevice(named: profile.audioDeviceName)
         }
 
         var channelPairError: String?
@@ -141,7 +120,7 @@ public final class ProfileActivationController {
         }
         logger.log("Activation de \(profile.name) terminée en \(Self.seconds(since: started))")
 
-        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, outputRoutingError: outputRoutingError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError, uadConsoleWindowError: uadConsoleWindowError)
+        return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, channelPairError: channelPairError, uadConsoleError: uadConsoleError, uadOfflineDevicesError: uadOfflineDevicesError, uadMixerError: uadMixerError, uadConsoleWindowError: uadConsoleWindowError)
     }
 
     /// Runs one activation step, logs its outcome and duration, and returns its error message.

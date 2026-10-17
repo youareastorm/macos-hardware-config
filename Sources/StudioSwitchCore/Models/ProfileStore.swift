@@ -17,7 +17,6 @@ public final class ProfileStore {
             deviceNameMatch: "Apollo Solo",
             audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "~/Documents/Universal Audio/Sessions/home guit vox.uadmix",
-            useIACDriver: false,
             daws: [
                 DAWEntry(name: "Logic Pro", bundleID: "com.apple.logic10", templatePath: nil),
                 DAWEntry(name: "Ableton Live 12 Suite", bundleID: "com.ableton.live", templatePath: nil)
@@ -28,7 +27,6 @@ public final class ProfileStore {
             deviceNameMatch: "Apollo",
             audioDeviceName: "Universal Audio Thunderbolt",
             uadConsoleSession: "~/Documents/Universal Audio/Sessions/octo.uadmix",
-            useIACDriver: false,
             daws: [
                 DAWEntry(name: "Pro Tools", bundleID: "com.avid.ProTools", templatePath: nil),
                 DAWEntry(name: "Cubase 15", bundleID: "com.steinberg.cubase15", templatePath: nil)

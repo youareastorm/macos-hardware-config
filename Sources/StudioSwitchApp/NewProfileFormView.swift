@@ -22,11 +22,9 @@ struct NewProfileFormView: View {
     @State private var deviceNameMatch = ""
     @State private var audioDeviceName = "Universal Audio Thunderbolt"
     @State private var uadConsoleSession = "~/Documents/Universal Audio/Sessions/"
-    @State private var useIACDriver = false
     @State private var selectedDAWNames: Set<String> = []
     @State private var detectedModels: [String] = []
     @State private var expectedSampleRate = ""
-    @State private var expectedOutputDeviceNames = ""
     @State private var expectedOutputChannelNames = ""
 
     init(hardwareModelProvider: HardwareModelProviding = ThunderboltHardwareModelProvider(), onCancel: @escaping () -> Void, onSave: @escaping (Profile) -> Void) {
@@ -56,9 +54,7 @@ struct NewProfileFormView: View {
 
             TextField("Nom du device audio (routage)", text: $audioDeviceName)
             TextField("Session UAD Console (.uadmix)", text: $uadConsoleSession)
-            Toggle("Activer IAC Driver", isOn: $useIACDriver)
             TextField("Fréquence attendue en Hz (optionnel)", text: $expectedSampleRate)
-            TextField("Sorties audio attendues (séparées par des virgules, ex. Virtuel 1, Virtuel 2)", text: $expectedOutputDeviceNames)
             TextField("Canaux de sortie attendus (2, séparés par une virgule, ex. VIRTUAL 1, VIRTUAL 2)", text: $expectedOutputChannelNames)
 
             Text("DAWs").font(.subheadline)
@@ -92,10 +88,8 @@ struct NewProfileFormView: View {
             deviceNameMatch: deviceNameMatch,
             audioDeviceName: audioDeviceName,
             uadConsoleSession: uadConsoleSession,
-            useIACDriver: useIACDriver,
             daws: daws,
             expectedSampleRate: Double(expectedSampleRate),
-            expectedOutputDeviceNames: Self.parseCommaList(expectedOutputDeviceNames),
             expectedOutputChannelNames: Self.parseCommaList(expectedOutputChannelNames)
         ))
     }

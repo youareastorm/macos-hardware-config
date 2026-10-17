@@ -107,32 +107,18 @@ public final class SystemHealthChecker {
             return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas l'entrée par défaut"))
         }
 
-        if profile.outputDeviceTargetName == nil {
-            let isDefaultOutput = audioStatus.defaultOutputDeviceName()?.caseInsensitiveCompare(profile.audioDeviceName) == .orderedSame
-            guard isDefaultOutput else {
-                return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas la sortie par défaut"))
-            }
+        let isDefaultOutput = audioStatus.defaultOutputDeviceName()?.caseInsensitiveCompare(profile.audioDeviceName) == .orderedSame
+        guard isDefaultOutput else {
+            return HealthCheckResult(label: "Interface audio", status: .warning("N'est pas la sortie par défaut"))
         }
 
         return HealthCheckResult(label: "Interface audio", status: .ok)
     }
 
     private func outputRoutingResult(for profile: Profile) -> HealthCheckResult {
-        guard let target = profile.outputDeviceTargetName else {
-            guard audioStatus.builtInOutputDeviceName() != nil else {
-                return HealthCheckResult(label: "Sortie HP", status: .error("Haut-parleurs Mac non détectés"))
-            }
-            return HealthCheckResult(label: "Sortie HP", status: .ok)
+        guard audioStatus.builtInOutputDeviceName() != nil else {
+            return HealthCheckResult(label: "Sortie HP", status: .error("Haut-parleurs Mac non détectés"))
         }
-
-        guard let currentOutput = audioStatus.defaultOutputDeviceName() else {
-            return HealthCheckResult(label: "Sortie HP", status: .error("Aucune sortie par défaut détectée"))
-        }
-
-        guard currentOutput.caseInsensitiveCompare(target) == .orderedSame else {
-            return HealthCheckResult(label: "Sortie HP", status: .error("Sortie actuelle : \(currentOutput)"))
-        }
-
         return HealthCheckResult(label: "Sortie HP", status: .ok)
     }
 }

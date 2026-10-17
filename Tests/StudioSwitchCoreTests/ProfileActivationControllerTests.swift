@@ -10,10 +10,8 @@ private final class MockConfigurator: AudioMIDIConfiguring {
     var setDefaultDeviceError: Error?
     var setDefaultInputDeviceError: Error?
     var setDefaultOutputDeviceError: Error?
-    var enableIACDriverError: Error?
     var setPreferredOutputChannelPairError: Error?
     private(set) var setDefaultDeviceCallCount = 0
-    private(set) var enableIACDriverCallCount = 0
     private(set) var setDefaultDeviceNames: [String] = []
     private(set) var setDefaultInputDeviceNames: [String] = []
     private(set) var setDefaultOutputDeviceNames: [String] = []
@@ -35,10 +33,6 @@ private final class MockConfigurator: AudioMIDIConfiguring {
         if let error = setDefaultOutputDeviceError { throw error }
     }
 
-    func enableIACDriverIfPresent() throws {
-        enableIACDriverCallCount += 1
-        if let error = enableIACDriverError { throw error }
-    }
 
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
         setPreferredOutputChannelPairCalls.append((pair, deviceName))
@@ -56,17 +50,6 @@ private final class MockChannelStatus: AudioDeviceStatusProviding {
     func builtInOutputDeviceName() -> String? { nil }
     func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { nil }
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { pairs[deviceName] ?? [] }
-}
-
-private final class MockMultiOutputDeviceProvider: MultiOutputDeviceProviding {
-    var error: Error?
-    private(set) var ensureCalls: [(name: String, subDeviceNames: [String])] = []
-
-    func ensureMultiOutputDevice(named deviceName: String, subDeviceNames: [String]) throws -> String {
-        ensureCalls.append((deviceName, subDeviceNames))
-        if let error { throw error }
-        return deviceName
-    }
 }
 
 private final class MockUADConsole: UADConsoleSessionEnsuring {
@@ -136,7 +119,6 @@ private final class PairApplyingConfigurator: AudioMIDIConfiguring {
     func setDefaultDevice(named deviceName: String) throws {}
     func setDefaultInputDevice(named deviceName: String) throws {}
     func setDefaultOutputDevice(named deviceName: String) throws {}
-    func enableIACDriverIfPresent() throws {}
     private(set) var applyCount = 0
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
         applyCount += 1
@@ -164,7 +146,7 @@ private final class MockWindowPlacer: UADConsoleWindowPlacing {
 private enum TestError: Error { case boom }
 
 final class ProfileActivationControllerTests: XCTestCase {
-    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: false, daws: [])
+    private let profile = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", daws: [])
 
     func test_activate_shortCircuitsWhenDeviceNotDetected() {
         let configurator = MockConfigurator()
@@ -200,75 +182,6 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertEqual(configurator.setDefaultDeviceNames, ["Universal Audio Thunderbolt"])
     }
 
-    func test_activate_enablesIACDriverOnlyWhenProfileRequestsIt() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let configurator = MockConfigurator()
-        let profileWithIAC = Profile(name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "s", useIACDriver: true, daws: [])
-        let controller = ProfileActivationController(detector: detector, configurator: configurator)
-
-        _ = controller.activate(profileWithIAC)
-
-        XCTAssertEqual(configurator.enableIACDriverCallCount, 1)
-    }
-
-    func test_activate_routesOutputSeparatelyWhenProfileHasSingleOutputTarget() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let configurator = MockConfigurator()
-        let multiOutput = MockMultiOutputDeviceProvider()
-        let profileWithOutput = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1"]
-        )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, multiOutputProvider: multiOutput)
-
-        let result = controller.activate(profileWithOutput)
-
-        XCTAssertEqual(configurator.setDefaultInputDeviceNames, ["Universal Audio Thunderbolt"])
-        XCTAssertEqual(configurator.setDefaultOutputDeviceNames, ["Virtuel 1"])
-        XCTAssertEqual(configurator.setDefaultDeviceCallCount, 0)
-        XCTAssertTrue(multiOutput.ensureCalls.isEmpty)
-        XCTAssertNil(result.outputRoutingError)
-    }
-
-    func test_activate_createsMultiOutputDeviceWhenProfileHasSeveralOutputTargets() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let configurator = MockConfigurator()
-        let multiOutput = MockMultiOutputDeviceProvider()
-        let profileWithOutputs = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
-        )
-        let controller = ProfileActivationController(detector: detector, configurator: configurator, multiOutputProvider: multiOutput)
-
-        let result = controller.activate(profileWithOutputs)
-
-        XCTAssertEqual(multiOutput.ensureCalls.count, 1)
-        XCTAssertEqual(multiOutput.ensureCalls.first?.name, "Virtuel 1 + Virtuel 2")
-        XCTAssertEqual(multiOutput.ensureCalls.first?.subDeviceNames, ["Virtuel 1", "Virtuel 2"])
-        XCTAssertEqual(configurator.setDefaultOutputDeviceNames, ["Virtuel 1 + Virtuel 2"])
-        XCTAssertNil(result.outputRoutingError)
-    }
-
-    func test_activate_reportsOutputRoutingErrorWithoutFailingActivation() {
-        let detector = MockDetector()
-        detector.matchedName = "Apollo Solo"
-        let multiOutput = MockMultiOutputDeviceProvider()
-        multiOutput.error = MultiOutputDeviceError.subDeviceNotFound("Virtuel 2")
-        let profileWithOutputs = Profile(
-            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputDeviceNames: ["Virtuel 1", "Virtuel 2"]
-        )
-        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), multiOutputProvider: multiOutput)
-
-        let result = controller.activate(profileWithOutputs)
-
-        XCTAssertTrue(result.deviceDetected)
-        XCTAssertNotNil(result.outputRoutingError)
-    }
-
     func test_activate_appliesMatchingOutputChannelPair() {
         let detector = MockDetector()
         detector.matchedName = "Apollo Solo"
@@ -281,7 +194,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         ]
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+            uadConsoleSession: "s", daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
@@ -316,7 +229,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         ]
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+            uadConsoleSession: "s", daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
@@ -337,7 +250,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         ]
         let profileWithChannels = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+            uadConsoleSession: "s", daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let controller = ProfileActivationController(detector: detector, configurator: configurator, channelStatus: channelStatus)
 
@@ -384,7 +297,7 @@ final class ProfileActivationControllerTests: XCTestCase {
 
     private let studioProfile = Profile(
         name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt",
-        uadConsoleSession: "s", useIACDriver: false, daws: [],
+        uadConsoleSession: "s", daws: [],
         expectedClockSource: "Internal", expectedMonitorLevel: 0, hideUADOfflineDevices: true
     )
 
@@ -481,7 +394,7 @@ final class ProfileActivationControllerTests: XCTestCase {
         let logger = RecordingLogger()
         let pairProfile = Profile(
             name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
-            uadConsoleSession: "s", useIACDriver: false, daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+            uadConsoleSession: "s", daws: [], expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
         )
         let controller = ProfileActivationController(
             detector: detector, configurator: configurator, channelStatus: status,

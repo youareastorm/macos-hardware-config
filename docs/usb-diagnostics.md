@@ -1,3 +1,5 @@
+> **2026-10-17 :** le code USB décrit ici (`IOKitUSBPowerFaultDetector`, `SystemProfilerUSBPowerProvider`, `Scripts/usb-topology.py`…) a été supprimé de l'app lors du nettoyage (commits `5c31322` et suivant). Il reste récupérable dans l'historique git ; ce document garde les constats.
+
 # Diagnostics USB — ce qu'on sait sur le matériel réel
 
 Ce document consolide tout ce qui a été établi empiriquement sur la machine de l'utilisateur

@@ -26,14 +26,14 @@ final class ProfileStoreTests: XCTestCase {
     func test_loadProfiles_readsExistingConfig() throws {
         let configURL = tempDirectory.appendingPathComponent("profiles.json")
         let json = """
-        { "profiles": [ { "name": "Custom", "deviceNameMatch": "X", "audioDeviceName": "Y", "uadConsoleSession": "s", "useIACDriver": true, "daws": [] } ] }
+        { "profiles": [ { "name": "Custom", "deviceNameMatch": "X", "audioDeviceName": "Y", "uadConsoleSession": "s", "daws": [] } ] }
         """
         try json.data(using: .utf8)!.write(to: configURL)
         let store = ProfileStore(configURL: configURL)
 
         let profiles = try store.loadProfiles()
 
-        XCTAssertEqual(profiles, [Profile(name: "Custom", deviceNameMatch: "X", audioDeviceName: "Y", uadConsoleSession: "s", useIACDriver: true, daws: [])])
+        XCTAssertEqual(profiles, [Profile(name: "Custom", deviceNameMatch: "X", audioDeviceName: "Y", uadConsoleSession: "s", daws: [])])
     }
 
     func test_loadProfiles_throwsOnMalformedJSON() throws {
@@ -52,7 +52,7 @@ final class ProfileStoreTests: XCTestCase {
         let configURL = tempDirectory.appendingPathComponent("profiles.json")
         let store = ProfileStore(configURL: configURL)
         _ = try store.loadProfiles()
-        let newProfile = Profile(name: "Mobile", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/mobile.uadmix", useIACDriver: false, daws: [])
+        let newProfile = Profile(name: "Mobile", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/mobile.uadmix", daws: [])
 
         try store.save(newProfile)
 
@@ -64,7 +64,7 @@ final class ProfileStoreTests: XCTestCase {
         let configURL = tempDirectory.appendingPathComponent("profiles.json")
         let store = ProfileStore(configURL: configURL)
         _ = try store.loadProfiles()
-        let replacement = Profile(name: "Home", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/new.uadmix", useIACDriver: true, daws: [])
+        let replacement = Profile(name: "Home", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/new.uadmix", daws: [])
 
         try store.save(replacement)
 
@@ -76,7 +76,7 @@ final class ProfileStoreTests: XCTestCase {
     func test_save_createsConfigWhenMissing() throws {
         let configURL = tempDirectory.appendingPathComponent("profiles.json")
         let store = ProfileStore(configURL: configURL)
-        let newProfile = Profile(name: "Mobile", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/mobile.uadmix", useIACDriver: false, daws: [])
+        let newProfile = Profile(name: "Mobile", deviceNameMatch: "Apollo Twin", audioDeviceName: "Universal Audio Thunderbolt", uadConsoleSession: "~/mobile.uadmix", daws: [])
 
         try store.save(newProfile)
 

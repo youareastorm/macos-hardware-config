@@ -5,7 +5,6 @@ public protocol AudioMIDIConfiguring {
     func setDefaultInputDevice(named deviceName: String) throws
     func setDefaultOutputDevice(named deviceName: String) throws
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws
-    func enableIACDriverIfPresent() throws
 }
 
 public enum AudioMIDIConfiguratorError: Error, Equatable {
@@ -15,11 +14,9 @@ public enum AudioMIDIConfiguratorError: Error, Equatable {
 
 public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
     private let deviceProvider: AudioDeviceProviding
-    private let midiProvider: MIDIDeviceProviding
 
-    public init(deviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider(), midiProvider: MIDIDeviceProviding = CoreMIDIDeviceProvider()) {
+    public init(deviceProvider: AudioDeviceProviding = CoreAudioDeviceProvider()) {
         self.deviceProvider = deviceProvider
-        self.midiProvider = midiProvider
     }
 
     public func setDefaultDevice(named deviceName: String) throws {
@@ -55,10 +52,6 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
         guard status == noErr else {
             throw AudioMIDIConfiguratorError.channelPairWriteFailed(status)
         }
-    }
-
-    public func enableIACDriverIfPresent() throws {
-        try midiProvider.enableIACDriver()
     }
 
     private func resolvedDeviceID(named deviceName: String) throws -> AudioDeviceID {

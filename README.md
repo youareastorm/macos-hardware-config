@@ -3,7 +3,7 @@ macOS hardware detection and configuration utility
 
 ## StudioSwitch
 
-StudioSwitch is a macOS menu-bar app that detects which Universal Audio interface is connected and configures macOS audio for it: default input/output, an optional combined Multi-Output Device, and the active monitor channel pair (e.g. always `VIRTUAL 1 / VIRTUAL 2`). It also makes sure UAD Console is running with the profile's session (e.g. `OCTO EMPTY` at the studio). It does all this by itself when the interface is plugged in, and can launch a DAW from the same menu.
+StudioSwitch is a macOS menu-bar app that detects which Universal Audio interface is connected and configures macOS audio for it: default input/output and the active monitor channel pair (e.g. always `VIRTUAL 1 / VIRTUAL 2`). It also makes sure UAD Console is running with the profile's session (e.g. `OCTO EMPTY` at the studio). It does all this by itself when the interface is plugged in, and can launch a DAW from the same menu.
 
 ### Prerequisites
 
@@ -72,9 +72,7 @@ The seeded "Studio" profile uses the placeholder `"Apollo"` for `deviceNameMatch
 Optional fields:
 
 - `expectedOutputChannelNames`: exactly two channel names the interface should have as its active output pair (e.g. `["VIRTUAL 1", "VIRTUAL 2"]`), for interfaces with many outputs. StudioSwitch writes this pair as the device's preferred stereo output on activation. The names must match what the interface reports (`MON L / MON R`, `LINE 1 / LINE 2`, `VIRTUAL 1 / VIRTUAL 2`, …); omit or leave `[]` to leave the pair alone.
-- `expectedOutputDeviceNames`: the device(s) the Mac's audio *output* should route to, separately from `audioDeviceName` (which then only handles input). One entry selects that device as the default output; two or more (e.g. `["Virtuel 1", "Virtuel 2"]`) make StudioSwitch create and select a combined Multi-Output Device on first activation, and reuse it afterwards. Omit or leave `[]` to keep `audioDeviceName` as both input and output.
 - `expectedSampleRate`: sample rate in Hz the interface should be running at. **Only checked, not applied**: a mismatch shows a warning on "Interface audio".
-- `useIACDriver`: enable the IAC Driver on activation (not yet verified on real hardware).
 - `daws`: the DAWs offered in the menu, shown as a row of icons (`name`, `bundleID`, optional `appPath`, `templatePath` — a project/template file to open the DAW with — and `icon`: `protools`, `cubase`, `live`, `logic` or `bitwig`, the artwork from the Geoff project shipped in `Resources/DAWIcons`; without it the application's own icon is used). The row appears as soon as a profile matches the connected hardware; hover shows the name, a click launches the DAW.
 
 - `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`).
@@ -89,7 +87,7 @@ StudioSwitch activates the matching profile on its own, without a click:
 - once at launch, if the interface is already connected;
 - whenever the list of CoreAudio devices changes (the interface plugged in, powered on, or removed), after a 2 s settling delay.
 
-It only acts when the *matched profile changes* (including from "none" to one), so unrelated device events — headphones, or the Multi-Output Device it creates itself — never re-apply a profile over a manual change. A profile counts as matched only when both its Thunderbolt hardware and its CoreAudio device are online (the two can appear at different moments); if configuring the device fails, it is retried on the next change.
+It only acts when the *matched profile changes* (including from "none" to one), so unrelated device events — headphones, virtual audio drivers — never re-apply a profile over a manual change. A profile counts as matched only when both its Thunderbolt hardware and its CoreAudio device are online (the two can appear at different moments); if configuring the device fails, it is retried on the next change.
 
 The **"Bascule auto au branchement"** checkbox in the menu turns this off (on by default, remembered between launches).
 
@@ -97,10 +95,8 @@ The **"Bascule auto au branchement"** checkbox in the menu turns this off (on by
 
 Clicking a profile in the menu, or an automatic activation, does the same thing:
 
-- Sets the default input (and, without `expectedOutputDeviceNames`, the output and system output too) to `audioDeviceName`.
-- With `expectedOutputDeviceNames`, creates/reuses the Multi-Output Device and sets it as the default output.
+- Sets the default input, output and system output to `audioDeviceName`.
 - With `expectedOutputChannelNames`, writes that channel pair as the interface's active stereo output.
-- Enables the IAC Driver when `useIACDriver` is set.
 - Makes sure UAD Console runs with `uadConsoleSession` open (details below).
 - Puts UAD Console's main window on the MacBook's own screen, whichever display macOS marks as main: if the window isn't entirely on the built-in display it's moved to its top-left corner (shrunk only if bigger than the screen); a window already there keeps its exact spot. Skipped when the built-in display is off (lid closed) or the session step failed.
 - Then, with `hideUADOfflineDevices`, unchecks View > Offline Devices if needed, and with `expectedClockSource` / `expectedMonitorLevel`, sets the clock and the monitor level (details below). These come after the session so loading it can't override them.
@@ -147,8 +143,8 @@ Every automatic evaluation and every activation (automatic or from the menu) is 
 
 After activating a profile (or when opening the menu, for whichever profile matches the connected hardware) the menu shows one row per check: a colored dot (green/yellow/red), the check's name, and a dropdown of the real alternatives. Picking one applies it immediately and re-runs the checks; "Actualiser" re-runs them without reactivating.
 
-- **Interface audio** — is `audioDeviceName` online, at the expected sample rate, and the default input (and output, when the profile has no separate `expectedOutputDeviceNames`).
-- **Sortie HP** — without `expectedOutputDeviceNames`: is the Mac's built-in output visible (a basic sanity check). With it: is the current default output exactly that device. Clicking the row's name opens Audio MIDI Setup.
+- **Interface audio** — is `audioDeviceName` online, at the expected sample rate, and the default input and output.
+- **Sortie HP** — is the Mac's built-in output visible (a basic sanity check). Clicking the row's name opens Audio MIDI Setup.
 - **Canaux de sortie** — only when `expectedOutputChannelNames` is set: is that channel pair currently active. Dropdown: every consecutive channel pair the device reports.
 - **Clock** — only with `expectedClockSource`: red with the current clock when it differs.
 - **Volume moniteur** — only with `expectedMonitorLevel`: yellow with the current level when it differs (you may have turned it on purpose).
@@ -158,7 +154,7 @@ These three rows have no dropdown.
 
 ### What was removed
 
-The menu used to also show UAD Console, MIDI, USB power and external-disk rows, plus a UAD session picker. They were taken out to focus on audio configuration, and their code was deleted (it's in the git history). The USB investigation is documented in `docs/usb-diagnostics.md`.
+The menu used to also show UAD Console, MIDI, USB power and external-disk rows, plus a UAD session picker; profiles could also combine several outputs into a Multi-Output Device and enable the IAC Driver. All of it was unused by the real configuration and was deleted on 2026-10-17 (commits `5c31322` and the next one; recover it from git history if needed). The USB investigation is documented in `docs/usb-diagnostics.md`.
 
 ### Next try (studio)
 
@@ -173,8 +169,8 @@ The menu used to also show UAD Console, MIDI, USB power and external-disk rows, 
 
 ### Validated on real hardware
 
-Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, Multi-Output Device creation/reuse/name-collision detection, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
+Verified on an Apollo Solo (home) and a Thunderbolt 3 Option Card interface (studio): detection, default input/output, the monitor channel pair being forced to `VIRTUAL 1 / VIRTUAL 2` on activation, activation at launch, automatic activation after unplugging and replugging the interface, and the UAD Console session: switch while running (both directions), no-op when already open, cold start, and the full studio scenario (session changed, UAD Console closed, interface unplugged and replugged → UAD Console relaunched on `OCTO EMPTY`).
 
 Also verified on the Apollo Solo: reading the clock and monitor level from the UA Mixer Engine, setting the monitor level (-28 → -35 dB, -34 → -35 dB, shown on Console's knob), and unchecking Offline Devices (checked → unchecked, confirmed in `ConsolePrefs.json`). After a reboot with StudioSwitch in Login Items, the whole Home setup came back on its own (session `empty home`, Offline Devices unchecked, clock, monitor level, VIRTUAL 1/2).
 
-Not verified: changing the clock source (see "Next try"), the IAC Driver step, DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).
+Not verified: changing the clock source (see "Next try"), DAW launching with a template, and the consecutive-pair assumption on interfaces other than the two above (stereo pairs are assumed to be consecutive channel numbers: 1/2, 3/4, …).

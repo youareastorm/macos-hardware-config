@@ -1,7 +1,7 @@
 extension ProfileActivationResult {
     /// The device was found but at least one activation step reported an error.
     public var hasError: Bool {
-        deviceDetected && [deviceConfigError, outputRoutingError, channelPairError, uadConsoleError, uadOfflineDevicesError, uadMixerError, uadConsoleWindowError]
+        deviceDetected && [deviceConfigError, channelPairError, uadConsoleError, uadOfflineDevicesError, uadMixerError, uadConsoleWindowError]
             .contains { $0 != nil }
     }
 }
