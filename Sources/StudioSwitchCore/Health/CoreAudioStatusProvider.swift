@@ -13,7 +13,8 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
     }
 
     public func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? {
-        guard let deviceID = deviceProvider.deviceID(named: deviceName) else { return nil }
+        // The output side: a Bluetooth headset's mic runs at 16 kHz while its playback is at 44.1 kHz.
+        guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: .output) else { return nil }
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyNominalSampleRate,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -44,7 +45,7 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
     }
 
     public func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? {
-        guard let deviceID = deviceProvider.deviceID(named: deviceName) else { return nil }
+        guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: .output) else { return nil }
 
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyPreferredChannelsForStereo,
@@ -64,7 +65,7 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
     }
 
     public func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] {
-        guard let deviceID = deviceProvider.deviceID(named: deviceName) else { return [] }
+        guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: .output) else { return [] }
         let channelCount = outputChannelCount(for: deviceID)
         guard channelCount >= 2 else { return [] }
 

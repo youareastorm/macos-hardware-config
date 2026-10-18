@@ -499,4 +499,19 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertNotNil(result.uadConsoleWindowError)
         XCTAssertTrue(result.hasError)
     }
+
+    func test_activate_skipsEveryUADStepWhenTheProfileHasNoSession() {
+        let detector = MockDetector()
+        detector.matchedName = "WH-CH720N"
+        let console = MockUADConsole()
+        let placer = MockWindowPlacer()
+        let headset = Profile(name: "Casque", deviceNameMatch: "", audioDeviceName: "WH-CH720N", uadConsoleSession: nil, daws: [], detectByAudioDevice: true)
+        let controller = ProfileActivationController(detector: detector, configurator: MockConfigurator(), uadConsole: console, uadConsoleWindow: placer)
+
+        let result = controller.activate(headset)
+
+        XCTAssertTrue(console.ensuredPaths.isEmpty)
+        XCTAssertEqual(placer.calls, 0)
+        XCTAssertFalse(result.hasError)
+    }
 }

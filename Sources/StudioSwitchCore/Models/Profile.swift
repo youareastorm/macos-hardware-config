@@ -22,7 +22,9 @@ public struct Profile: Codable, Equatable {
     public let name: String
     public let deviceNameMatch: String
     public let audioDeviceName: String
-    public let uadConsoleSession: String
+    /// The `.uadmix` session UAD Console should have open. `nil` (e.g. a Bluetooth headset) skips
+    /// every UAD Console step.
+    public let uadConsoleSession: String?
     public let daws: [DAWEntry]
     public let expectedSampleRate: Double?
     /// Names of the two channels `audioDeviceName` should have as its default output pair, e.g.
@@ -36,18 +38,23 @@ public struct Profile: Codable, Equatable {
     public let expectedMonitorLevel: Double?
     /// Uncheck UAD Console's View > Offline Devices so units that aren't connected aren't shown.
     public let hideUADOfflineDevices: Bool
+    /// Detect this profile by its CoreAudio device (`audioDeviceName`) being present, instead of a
+    /// Thunderbolt device named `deviceNameMatch` — for devices that aren't Thunderbolt, such as a
+    /// Bluetooth headset.
+    public let detectByAudioDevice: Bool
 
     public init(
         name: String,
         deviceNameMatch: String,
         audioDeviceName: String,
-        uadConsoleSession: String,
+        uadConsoleSession: String?,
         daws: [DAWEntry],
         expectedSampleRate: Double? = nil,
         expectedOutputChannelNames: [String] = [],
         expectedClockSource: String? = nil,
         expectedMonitorLevel: Double? = nil,
-        hideUADOfflineDevices: Bool = false
+        hideUADOfflineDevices: Bool = false,
+        detectByAudioDevice: Bool = false
     ) {
         self.name = name
         self.deviceNameMatch = deviceNameMatch
@@ -59,6 +66,7 @@ public struct Profile: Codable, Equatable {
         self.expectedClockSource = expectedClockSource
         self.expectedMonitorLevel = expectedMonitorLevel
         self.hideUADOfflineDevices = hideUADOfflineDevices
+        self.detectByAudioDevice = detectByAudioDevice
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,13 +74,14 @@ public struct Profile: Codable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         deviceNameMatch = try container.decode(String.self, forKey: .deviceNameMatch)
         audioDeviceName = try container.decode(String.self, forKey: .audioDeviceName)
-        uadConsoleSession = try container.decode(String.self, forKey: .uadConsoleSession)
+        uadConsoleSession = try container.decodeIfPresent(String.self, forKey: .uadConsoleSession)
         daws = try container.decode([DAWEntry].self, forKey: .daws)
         expectedSampleRate = try container.decodeIfPresent(Double.self, forKey: .expectedSampleRate)
         expectedOutputChannelNames = try container.decodeIfPresent([String].self, forKey: .expectedOutputChannelNames) ?? []
         expectedClockSource = try container.decodeIfPresent(String.self, forKey: .expectedClockSource)
         expectedMonitorLevel = try container.decodeIfPresent(Double.self, forKey: .expectedMonitorLevel)
         hideUADOfflineDevices = try container.decodeIfPresent(Bool.self, forKey: .hideUADOfflineDevices) ?? false
+        detectByAudioDevice = try container.decodeIfPresent(Bool.self, forKey: .detectByAudioDevice) ?? false
     }
 }
 

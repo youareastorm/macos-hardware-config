@@ -75,7 +75,15 @@ Optional fields:
 - `expectedSampleRate`: sample rate in Hz the interface should be running at. **Only checked, not applied**: a mismatch shows a warning on "Interface audio".
 - `daws`: the DAWs offered in the menu, shown as a row of icons (`name`, `bundleID`, optional `appPath`, `templatePath` — a project/template file to open the DAW with — and `icon`: `protools`, `cubase`, `live`, `logic` or `bitwig`, the artwork from the Geoff project shipped in `Resources/DAWIcons`; without it the application's own icon is used). The row appears as soon as a profile matches the connected hardware; hover shows the name, a click launches the DAW.
 
-- `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`).
+- `uadConsoleSession`: the `.uadmix` session UAD Console should have open for this profile (e.g. `~/Documents/Universal Audio/Sessions/OCTO EMPTY.uadmix`). Omit it for a profile that has nothing to do with UAD Console: every UAD step is then skipped.
+- `detectByAudioDevice`: `true` to detect the profile by its CoreAudio device `audioDeviceName` being present, instead of a Thunderbolt device named `deviceNameMatch` (leave that empty). For non-Thunderbolt devices such as a Bluetooth headset. Example, the "Casque" profile, listed after Home and Studio so a connected Apollo always wins:
+
+  ```json
+  { "name": "Casque", "deviceNameMatch": "", "detectByAudioDevice": true,
+    "audioDeviceName": "WH-CH720N", "expectedSampleRate": 44100, "daws": [ … ] }
+  ```
+
+  A Bluetooth headset appears as two CoreAudio devices with the same name (its mic: 1 input channel at 16 kHz; its playback: 2 output channels at 44.1 kHz — 48 kHz isn't offered). StudioSwitch picks the input side for the default input and the output side for the default output and for the sample-rate check.
 - `expectedClockSource`: the clock UAD Console should be on (e.g. `"Internal"`), as offered by the UA Mixer Engine for the connected unit. Omit to leave the clock alone.
 - `expectedMonitorLevel`: UAD Console's MONITOR level in dB, from -96 to 0 (e.g. `-35` at home, `0` at the studio). Set once on activation; you can turn it afterwards. Omit to leave it alone.
 - `hideUADOfflineDevices`: `true` to keep UAD Console's View > Offline Devices unchecked, so units that aren't connected (e.g. the studio's Apollo x8 at home) aren't shown after the connected unit's channels.

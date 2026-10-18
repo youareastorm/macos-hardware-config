@@ -62,13 +62,17 @@ public final class ProfileActivationController {
             logPair("après", profile)
         }
 
-        let uadConsoleError = step("Session UAD Console → \((profile.uadConsoleSession as NSString).lastPathComponent)") {
-            try uadConsole?.ensureSessionOpen(atPath: profile.uadConsoleSession)
+        // A profile without a session (e.g. a Bluetooth headset) has nothing to do with UAD Console.
+        var uadConsoleError: String?
+        if let session = profile.uadConsoleSession {
+            uadConsoleError = step("Session UAD Console → \((session as NSString).lastPathComponent)") {
+                try uadConsole?.ensureSessionOpen(atPath: session)
+            }
         }
 
         // Only once the session step succeeded: the window may not exist otherwise.
         var uadConsoleWindowError: String?
-        if uadConsoleError == nil, let uadConsoleWindow {
+        if profile.uadConsoleSession != nil, uadConsoleError == nil, let uadConsoleWindow {
             var outcome: UADConsoleWindowOutcome?
             uadConsoleWindowError = step("Fenêtre UAD Console → écran du Mac") {
                 outcome = try uadConsoleWindow.ensureOnBuiltInDisplay()

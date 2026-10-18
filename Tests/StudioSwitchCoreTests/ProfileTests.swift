@@ -112,4 +112,19 @@ final class ProfileTests: XCTestCase {
 
         XCTAssertNil(try JSONDecoder().decode(DAWEntry.self, from: json).icon)
     }
+
+    func test_decodesAHeadsetProfileWithoutUADSession() throws {
+        let json = #"{"name": "Casque", "deviceNameMatch": "", "audioDeviceName": "WH-CH720N", "detectByAudioDevice": true, "daws": []}"#.data(using: .utf8)!
+
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+
+        XCTAssertTrue(profile.detectByAudioDevice)
+        XCTAssertNil(profile.uadConsoleSession)
+    }
+
+    func test_detectByAudioDevice_defaultsToFalse() throws {
+        let json = #"{"name": "Home", "deviceNameMatch": "Apollo Solo", "audioDeviceName": "Universal Audio Thunderbolt", "uadConsoleSession": "s", "daws": []}"#.data(using: .utf8)!
+
+        XCTAssertFalse(try JSONDecoder().decode(Profile.self, from: json).detectByAudioDevice)
+    }
 }

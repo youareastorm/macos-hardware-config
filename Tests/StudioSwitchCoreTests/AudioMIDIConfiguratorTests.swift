@@ -4,6 +4,11 @@ import CoreAudio
 
 private final class MockAudioDeviceProvider: AudioDeviceProviding {
     var idsByName: [String: AudioDeviceID] = [:]
+    /// Devices split in two (a Bluetooth headset: one input device, one output device, same name).
+    var idsByDirection: [String: [AudioDirection: AudioDeviceID]] = [:]
+    func deviceID(named exactName: String, direction: AudioDirection) -> AudioDeviceID? {
+        idsByDirection[exactName]?[direction] ?? idsByName[exactName]
+    }
     private(set) var setDefaultCalls: [(AudioDeviceID, AudioObjectPropertySelector)] = []
     func connectedDeviceNames() -> [String] { Array(idsByName.keys) }
     func deviceID(named exactName: String) -> AudioDeviceID? { idsByName[exactName] }
@@ -76,5 +81,16 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         XCTAssertThrowsError(try configurator.setPreferredOutputChannelPair(pair, forDeviceNamed: "Missing")) { error in
             XCTAssertEqual(error as? AudioMIDIConfiguratorError, .deviceNotFound("Missing"))
         }
+    }
+
+    func test_setDefaultDevice_usesTheInputSideForInputAndTheOutputSideForOutput() throws {
+        let deviceProvider = MockAudioDeviceProvider()
+        deviceProvider.idsByDirection["WH-CH720N"] = [.input: 191, .output: 185]
+        let configurator = AudioMIDIConfigurator(deviceProvider: deviceProvider)
+
+        try configurator.setDefaultDevice(named: "WH-CH720N")
+
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.0), [191, 185, 185])
+        XCTAssertEqual(deviceProvider.setDefaultCalls.map(\.1), [kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice])
     }
 }

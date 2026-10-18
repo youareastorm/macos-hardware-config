@@ -20,25 +20,23 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
     }
 
     public func setDefaultDevice(named deviceName: String) throws {
-        let deviceID = try resolvedDeviceID(named: deviceName)
-        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultInputDevice)
-        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultOutputDevice)
-        try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+        try setDefaultInputDevice(named: deviceName)
+        try setDefaultOutputDevice(named: deviceName)
     }
 
     public func setDefaultInputDevice(named deviceName: String) throws {
-        let deviceID = try resolvedDeviceID(named: deviceName)
+        let deviceID = try resolvedDeviceID(named: deviceName, direction: .input)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultInputDevice)
     }
 
     public func setDefaultOutputDevice(named deviceName: String) throws {
-        let deviceID = try resolvedDeviceID(named: deviceName)
+        let deviceID = try resolvedDeviceID(named: deviceName, direction: .output)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultOutputDevice)
         try deviceProvider.setDefaultDevice(deviceID, selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
     }
 
     public func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
-        let deviceID = try resolvedDeviceID(named: deviceName)
+        let deviceID = try resolvedDeviceID(named: deviceName, direction: .output)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyPreferredChannelsForStereo,
             mScope: kAudioDevicePropertyScopeOutput,
@@ -54,8 +52,8 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
         }
     }
 
-    private func resolvedDeviceID(named deviceName: String) throws -> AudioDeviceID {
-        guard let deviceID = deviceProvider.deviceID(named: deviceName) else {
+    private func resolvedDeviceID(named deviceName: String, direction: AudioDirection) throws -> AudioDeviceID {
+        guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: direction) else {
             throw AudioMIDIConfiguratorError.deviceNotFound(deviceName)
         }
         return deviceID
