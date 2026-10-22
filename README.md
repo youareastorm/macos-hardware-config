@@ -97,6 +97,8 @@ StudioSwitch activates the matching profile on its own, without a click:
 
 It only acts when the *matched profile changes* (including from "none" to one), so unrelated device events — headphones, virtual audio drivers — never re-apply a profile over a manual change. A profile counts as matched only when both its Thunderbolt hardware and its CoreAudio device are online (the two can appear at different moments); if configuring the device fails, it is retried on the next change.
 
+At launch, if the matched profile is the same as the last one activated (remembered across restarts in the app's preferences, key `lastActivatedProfile`), only the macOS settings are reapplied — default input/output and the monitor channel pair, which don't reliably survive a restart (the pair was back on LINE 1/2 after two of three logged restarts) — and UAD Console isn't launched or touched (no session, window, offline units, clock or monitor level). A different interface than last time, an unplug/replug during the session, or a click on a profile does the full activation.
+
 The **"Bascule auto au branchement"** checkbox in the menu turns this off (on by default, remembered between launches).
 
 ### What activation applies

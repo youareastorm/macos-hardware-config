@@ -1,7 +1,7 @@
 import Foundation
 
 public protocol ProfileActivating {
-    func activate(_ profile: Profile) -> ProfileActivationResult
+    func activate(_ profile: Profile, scope: ActivationScope) -> ProfileActivationResult
 }
 
 extension ProfileActivationController: ProfileActivating {}
@@ -25,6 +25,8 @@ public final class AutoActivationCoordinator {
     private let debounce: TimeInterval
     private let logger: ActivationLogging
     private let onActivation: (ProfileActivationResult) -> Void
+    private let lastActivatedProfile: (get: () -> String?, set: (String?) -> Void)
+    private var hasEvaluated = false
 
     private let queue = DispatchQueue(label: "com.simonrenard.studioswitch.autoactivation")
     private var lastActivatedProfileName: String?
@@ -39,7 +41,8 @@ public final class AutoActivationCoordinator {
         watcher: AudioDeviceListWatching,
         debounce: TimeInterval = 2,
         logger: ActivationLogging = NoActivationLogger(),
-        onActivation: @escaping (ProfileActivationResult) -> Void = { _ in }
+        onActivation: @escaping (ProfileActivationResult) -> Void = { _ in },
+        lastActivatedProfile: (get: () -> String?, set: (String?) -> Void) = (get: { nil }, set: { _ in })
     ) {
         self.loadProfiles = loadProfiles
         self.detector = detector
@@ -50,6 +53,7 @@ public final class AutoActivationCoordinator {
         self.debounce = debounce
         self.logger = logger
         self.onActivation = onActivation
+        self.lastActivatedProfile = lastActivatedProfile
     }
 
     public func start() {
@@ -76,6 +80,8 @@ public final class AutoActivationCoordinator {
 
     func evaluate(trigger: String = "manuel") {
         logger.log("Évaluation (\(trigger))")
+        let atLaunch = !hasEvaluated
+        hasEvaluated = true
         guard isEnabled() else {
             logger.log("  bascule auto désactivée, rien à faire")
             return
@@ -107,10 +113,15 @@ public final class AutoActivationCoordinator {
             return
         }
 
-        let result = activator.activate(matched)
+        // At launch with the same interface as last time (remembered across restarts), only the
+        // macOS settings are reapplied — they don't survive a restart reliably (the pair was back on
+        // LINE 1/2 after two of three logged restarts) — and UAD Console is left alone.
+        let scope: ActivationScope = atLaunch && matched.name == lastActivatedProfile.get() ? .systemAudioOnly : .full
+        let result = activator.activate(matched, scope: scope)
         onActivation(result)
         if result.deviceDetected && result.deviceConfigError == nil {
             lastActivatedProfileName = matched.name
+            lastActivatedProfile.set(matched.name)
         } else {
             logger.log("  \(matched.name) n'a pas pu être configuré, nouvel essai au prochain changement")
         }

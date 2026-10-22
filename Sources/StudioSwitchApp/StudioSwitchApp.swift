@@ -32,7 +32,11 @@ struct StudioSwitchApp: App {
             isEnabled: { AutoActivationSetting.isEnabled },
             watcher: CoreAudioDeviceListWatcher(),
             logger: FileActivationLogger.shared,
-            onActivation: { StatusMonitor.shared.recordActivation($0) }
+            onActivation: { StatusMonitor.shared.recordActivation($0) },
+            lastActivatedProfile: (
+                get: { UserDefaults.standard.string(forKey: "lastActivatedProfile") },
+                set: { UserDefaults.standard.set($0, forKey: "lastActivatedProfile") }
+            )
         )
         coordinator.start()
         StatusMonitor.shared.start()

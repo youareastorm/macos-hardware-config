@@ -514,4 +514,28 @@ final class ProfileActivationControllerTests: XCTestCase {
         XCTAssertEqual(placer.calls, 0)
         XCTAssertFalse(result.hasError)
     }
+
+    func test_activate_systemAudioOnly_skipsEveryUADStep() {
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let configurator = MockConfigurator()
+        let console = MockUADConsole()
+        let placer = MockWindowPlacer()
+        let mixer = MockUADMixer()
+        let offline = MockOfflineDevices()
+        let full = Profile(
+            name: "Home", deviceNameMatch: "Apollo Solo", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", daws: [], expectedClockSource: "Internal", expectedMonitorLevel: -35, hideUADOfflineDevices: true
+        )
+        let controller = ProfileActivationController(detector: detector, configurator: configurator, uadConsole: console, uadMixer: mixer, uadOfflineDevices: offline, uadConsoleWindow: placer)
+
+        let result = controller.activate(full, scope: .systemAudioOnly)
+
+        XCTAssertEqual(configurator.setDefaultDeviceCallCount, 1)
+        XCTAssertTrue(console.ensuredPaths.isEmpty)
+        XCTAssertEqual(placer.calls, 0)
+        XCTAssertTrue(mixer.applyCalls.isEmpty)
+        XCTAssertEqual(offline.hideCalls, 0)
+        XCTAssertFalse(result.hasError)
+    }
 }

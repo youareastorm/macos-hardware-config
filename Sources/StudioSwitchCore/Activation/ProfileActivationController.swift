@@ -11,6 +11,15 @@ public struct ProfileActivationResult: Equatable {
     public var uadConsoleWindowError: String? = nil
 }
 
+public enum ActivationScope: Equatable {
+    /// Everything: macOS audio settings, then UAD Console (session, window, offline units) and
+    /// the UA Mixer Engine (clock, monitor level).
+    case full
+    /// macOS audio settings only (default devices, monitor channel pair). Used at launch when the
+    /// interface is the same as last time: UAD Console isn't launched or touched.
+    case systemAudioOnly
+}
+
 public final class ProfileActivationController {
     private let detector: DeviceDetecting
     private let configurator: AudioMIDIConfiguring
@@ -41,13 +50,14 @@ public final class ProfileActivationController {
         self.logger = logger
     }
 
-    public func activate(_ profile: Profile) -> ProfileActivationResult {
+    public func activate(_ profile: Profile, scope: ActivationScope = .full) -> ProfileActivationResult {
         guard let hardwareName = detector.matchingDeviceName(for: profile) else {
             logger.log("Activation de \(profile.name) : \(profile.deviceNameMatch) non détecté")
             return ProfileActivationResult(profile: profile, deviceDetected: false, deviceConfigError: nil, channelPairError: nil, uadConsoleError: nil)
         }
         let started = Date()
-        logger.log("Activation de \(profile.name) (carte : \(hardwareName))")
+        logger.log("Activation de \(profile.name) (carte : \(hardwareName))" + (scope == .systemAudioOnly ? " — réglages macOS seulement, même carte qu'au dernier lancement" : ""))
+        let includesUAD = scope == .full
 
         let deviceConfigError = step("Entrée/sortie par défaut → \(profile.audioDeviceName)") {
             try configurator.setDefaultDevice(named: profile.audioDeviceName)
@@ -64,7 +74,7 @@ public final class ProfileActivationController {
 
         // A profile without a session (e.g. a Bluetooth headset) has nothing to do with UAD Console.
         var uadConsoleError: String?
-        if let session = profile.uadConsoleSession {
+        if includesUAD, let session = profile.uadConsoleSession {
             uadConsoleError = step("Session UAD Console → \((session as NSString).lastPathComponent)") {
                 try uadConsole?.ensureSessionOpen(atPath: session)
             }
@@ -72,7 +82,7 @@ public final class ProfileActivationController {
 
         // Only once the session step succeeded: the window may not exist otherwise.
         var uadConsoleWindowError: String?
-        if profile.uadConsoleSession != nil, uadConsoleError == nil, let uadConsoleWindow {
+        if includesUAD, profile.uadConsoleSession != nil, uadConsoleError == nil, let uadConsoleWindow {
             var outcome: UADConsoleWindowOutcome?
             uadConsoleWindowError = step("Fenêtre UAD Console → écran du Mac") {
                 outcome = try uadConsoleWindow.ensureOnBuiltInDisplay()
@@ -88,7 +98,7 @@ public final class ProfileActivationController {
         // After the session: hiding offline units needs UAD Console running, and the mixer
         // settings go last so a freshly loaded session can't override them.
         var uadOfflineDevicesError: String?
-        if profile.hideUADOfflineDevices, let uadOfflineDevices {
+        if includesUAD, profile.hideUADOfflineDevices, let uadOfflineDevices {
             logger.log("  Offline Devices avant : \(describe { try uadOfflineDevices.isShowingOfflineDevices() ? "coché" : "décoché" })")
             uadOfflineDevicesError = step("Masquer les cartes hors ligne") {
                 try uadOfflineDevices.hideOfflineDevices()
@@ -96,7 +106,7 @@ public final class ProfileActivationController {
         }
 
         var uadMixerError: String?
-        if profile.expectedClockSource != nil || profile.expectedMonitorLevel != nil, let uadMixer {
+        if includesUAD, profile.expectedClockSource != nil || profile.expectedMonitorLevel != nil, let uadMixer {
             logger.log("  moteur UA avant : \(describe { Self.describe(try uadMixer.currentState()) })")
             uadMixerError = step("Clock → \(profile.expectedClockSource ?? "inchangée"), moniteur → \(profile.expectedMonitorLevel.map { "\($0) dB" } ?? "inchangé")") {
                 try uadMixer.apply(clockSource: profile.expectedClockSource, monitorLevel: profile.expectedMonitorLevel)

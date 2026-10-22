@@ -10,9 +10,11 @@ private final class MockDetector: DeviceDetecting {
 
 private final class MockActivator: ProfileActivating {
     private(set) var activated: [String] = []
+    private(set) var scopes: [ActivationScope] = []
     var deviceConfigError: String?
-    func activate(_ profile: Profile) -> ProfileActivationResult {
+    func activate(_ profile: Profile, scope: ActivationScope) -> ProfileActivationResult {
         activated.append(profile.name)
+        scopes.append(scope)
         return ProfileActivationResult(profile: profile, deviceDetected: true, deviceConfigError: deviceConfigError, channelPairError: nil, uadConsoleError: nil)
     }
 }
@@ -30,6 +32,11 @@ private final class TriggerableWatcher: AudioDeviceListWatching {
 private final class MockWatcher: AudioDeviceListWatching {
     private(set) var started = false
     func start(onChange: @escaping () -> Void) { started = true }
+}
+
+/// What would be kept in UserDefaults between launches.
+private final class MemoryStore {
+    var lastProfile: String?
 }
 
 final class AutoActivationCoordinatorTests: XCTestCase {
@@ -197,5 +204,58 @@ final class AutoActivationCoordinatorTests: XCTestCase {
         coordinator.evaluate()
 
         XCTAssertEqual(reported, ["Home"])
+    }
+
+    private func coordinator(remembering store: MemoryStore, watcher: AudioDeviceListWatching = MockWatcher()) -> AutoActivationCoordinator {
+        AutoActivationCoordinator(
+            loadProfiles: { [self.home, self.studio] }, detector: detector, isAudioDeviceOnline: { _ in self.audioOnline },
+            activator: activator, isEnabled: { self.enabled }, watcher: watcher,
+            lastActivatedProfile: (get: { store.lastProfile }, set: { store.lastProfile = $0 })
+        )
+    }
+
+    func test_launch_withTheSameCardAsLastTime_onlyAppliesTheSystemAudioSettings() {
+        let store = MemoryStore()
+        store.lastProfile = "Home"
+        detector.connectedProfileName = "Home"
+
+        coordinator(remembering: store).evaluate(trigger: "lancement")
+
+        XCTAssertEqual(activator.activated, ["Home"])
+        XCTAssertEqual(activator.scopes, [.systemAudioOnly])
+    }
+
+    func test_launch_withADifferentCardThanLastTime_activatesEverything() {
+        let store = MemoryStore()
+        store.lastProfile = "Studio"
+        detector.connectedProfileName = "Home"
+
+        coordinator(remembering: store).evaluate(trigger: "lancement")
+
+        XCTAssertEqual(activator.scopes, [.full])
+        XCTAssertEqual(store.lastProfile, "Home")
+    }
+
+    func test_launch_withNothingRemembered_activatesEverything() {
+        detector.connectedProfileName = "Home"
+
+        coordinator(remembering: MemoryStore()).evaluate(trigger: "lancement")
+
+        XCTAssertEqual(activator.scopes, [.full])
+    }
+
+    func test_replugDuringTheSession_activatesEverythingEvenForTheSameCard() {
+        let store = MemoryStore()
+        store.lastProfile = "Home"
+        detector.connectedProfileName = "Home"
+        let coordinator = coordinator(remembering: store)
+
+        coordinator.evaluate(trigger: "lancement")
+        detector.connectedProfileName = nil
+        coordinator.evaluate(trigger: "changement de périphériques")
+        detector.connectedProfileName = "Home"
+        coordinator.evaluate(trigger: "changement de périphériques")
+
+        XCTAssertEqual(activator.scopes, [.systemAudioOnly, .full])
     }
 }
