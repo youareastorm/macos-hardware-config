@@ -119,12 +119,14 @@ public final class ProfileActivationController {
         // So it's checked again after the UAD steps and put back if it moved.
         if profile.expectedOutputChannelNames.count == 2, channelPairError == nil {
             let current = channelStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName)
-            logger.log("  paire après UAD : \(current.map { $0.joined(separator: " / ") } ?? "illisible")")
-            let moved = current.map { names in
+            let speakers = channelStatus.speakerLayoutChannelNames(forDeviceNamed: profile.audioDeviceName)
+            logger.log("  paire après UAD : \(current.map { $0.joined(separator: " / ") } ?? "illisible")\(speakers.map { ", haut-parleurs \($0.joined(separator: " / "))" } ?? "")")
+            let differs: ([String]) -> Bool = { names in
                 names.count != 2 || !zip(names, profile.expectedOutputChannelNames).allSatisfy {
                     $0.caseInsensitiveCompare($1) == .orderedSame
                 }
-            } ?? false
+            }
+            let moved = (current.map(differs) ?? false) || (speakers.map(differs) ?? false)
             if moved {
                 channelPairError = step("Paire de sortie remise après UAD Console") {
                     if let error = applyOutputChannelPair(for: profile) { throw ActivationStepError(message: error) }
@@ -153,7 +155,8 @@ public final class ProfileActivationController {
 
     private func logPair(_ moment: String, _ profile: Profile) {
         let current = channelStatus.outputChannelNames(forDeviceNamed: profile.audioDeviceName)
-        logger.log("  paire \(moment) : \(current.map { $0.joined(separator: " / ") } ?? "illisible")")
+        let speakers = channelStatus.speakerLayoutChannelNames(forDeviceNamed: profile.audioDeviceName)
+        logger.log("  paire \(moment) : \(current.map { $0.joined(separator: " / ") } ?? "illisible")\(speakers.map { ", haut-parleurs \($0.joined(separator: " / "))" } ?? "")")
     }
 
     private func describe(_ read: () throws -> String) -> String {

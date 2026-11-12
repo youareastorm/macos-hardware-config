@@ -10,6 +10,7 @@ public protocol AudioMIDIConfiguring {
 public enum AudioMIDIConfiguratorError: Error, Equatable {
     case deviceNotFound(String)
     case channelPairWriteFailed(OSStatus)
+    case speakerLayoutWriteFailed(OSStatus)
 }
 
 public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
@@ -49,6 +50,15 @@ public final class AudioMIDIConfigurator: AudioMIDIConfiguring {
         }
         guard status == noErr else {
             throw AudioMIDIConfiguratorError.channelPairWriteFailed(status)
+        }
+
+        // Apps play stereo to the speaker layout's left/right, which isn't kept in step with the
+        // stereo pair: both have to point at the pair.
+        let channelCount = SpeakerLayout.outputChannelCount(of: deviceID)
+        guard channelCount >= pair.secondChannel else { return }
+        let layoutStatus = SpeakerLayout.write(pair.speakerLayoutLabels(channelCount: channelCount), to: deviceID)
+        guard layoutStatus == noErr else {
+            throw AudioMIDIConfiguratorError.speakerLayoutWriteFailed(layoutStatus)
         }
     }
 

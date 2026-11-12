@@ -83,6 +83,18 @@ final class AudioMIDIConfiguratorTests: XCTestCase {
         }
     }
 
+    func test_speakerLayoutLabels_putsLeftAndRightOnThePairAndLeavesTheRestUnknown() {
+        // What Audio MIDI Setup's "Configure Speakers" wrote on the Apollo x8 (36 output channels).
+        let pair = ChannelPair(firstChannel: 21, secondChannel: 22, firstName: "VIRTUAL 1", secondName: "VIRTUAL 2")
+
+        let labels = pair.speakerLayoutLabels(channelCount: 36)
+
+        XCTAssertEqual(labels.count, 36)
+        XCTAssertEqual(labels[20], kAudioChannelLabel_Left)
+        XCTAssertEqual(labels[21], kAudioChannelLabel_Right)
+        XCTAssertEqual(labels.filter { $0 == kAudioChannelLabel_Unknown }.count, 34)
+    }
+
     func test_setDefaultDevice_usesTheInputSideForInputAndTheOutputSideForOutput() throws {
         let deviceProvider = MockAudioDeviceProvider()
         deviceProvider.idsByDirection["WH-CH720N"] = [.input: 191, .output: 185]

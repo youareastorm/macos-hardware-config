@@ -82,13 +82,23 @@ public final class SystemHealthChecker {
             return HealthCheckResult(label: "Canaux de sortie", status: .error("Impossible de lire les canaux de \(profile.audioDeviceName)"))
         }
 
-        let matches = current.count == profile.expectedOutputChannelNames.count
-            && zip(current, profile.expectedOutputChannelNames).allSatisfy { $0.caseInsensitiveCompare($1) == .orderedSame }
+        let matches = Self.sameChannels(current, profile.expectedOutputChannelNames)
         guard matches else {
             return HealthCheckResult(label: "Canaux de sortie", status: .error("Actuellement : \(current.joined(separator: ", "))"))
         }
 
+        // The speaker layout is what apps actually play to; a device without one has nothing to check.
+        if let speakers = audioStatus.speakerLayoutChannelNames(forDeviceNamed: profile.audioDeviceName),
+           !Self.sameChannels(speakers, profile.expectedOutputChannelNames) {
+            return HealthCheckResult(label: "Canaux de sortie", status: .error("Haut-parleurs : \(speakers.joined(separator: ", "))"))
+        }
+
         return HealthCheckResult(label: "Canaux de sortie", status: .ok)
+    }
+
+    private static func sameChannels(_ current: [String], _ expected: [String]) -> Bool {
+        current.count == expected.count
+            && zip(current, expected).allSatisfy { $0.caseInsensitiveCompare($1) == .orderedSame }
     }
 
     private func audioInterfaceResult(for profile: Profile) -> HealthCheckResult {

@@ -10,6 +10,7 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     var builtInOutput: String?
     var outputChannels: [String: [String]] = [:]
     var availableChannelPairs: [String: [ChannelPair]] = [:]
+    var speakerLayouts: [String: [String]] = [:]
 
     func isDeviceOnline(named deviceName: String) -> Bool { onlineDeviceNames.contains(deviceName) }
     func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? { sampleRates[deviceName] }
@@ -18,6 +19,7 @@ private final class MockAudioDeviceStatusProvider: AudioDeviceStatusProviding {
     func builtInOutputDeviceName() -> String? { builtInOutput }
     func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { outputChannels[deviceName] }
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { availableChannelPairs[deviceName] ?? [] }
+    func speakerLayoutChannelNames(forDeviceNamed deviceName: String) -> [String]? { speakerLayouts[deviceName] }
 }
 
 private final class StubUADMixer: UAMixerControlling {
@@ -191,6 +193,40 @@ final class SystemHealthCheckerTests: XCTestCase {
         let results = checker.check(for: profileWithChannels)
 
         XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .error("Actuellement : Main 1, Main 2"))
+    }
+
+    func test_outputChannels_errorsWhenTheSpeakerLayoutPointsElsewhere() {
+        // Seen at the studio on 2026-11-12: stereo pair on VIRTUAL 1/2 but no sound, because
+        // Audio MIDI Setup's speaker layout still sent left/right to other channels.
+        let profileWithChannels = Profile(
+            name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", daws: [],
+            expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+        )
+        let audioStatus = MockAudioDeviceStatusProvider()
+        audioStatus.outputChannels["Universal Audio Thunderbolt"] = ["VIRTUAL 1", "VIRTUAL 2"]
+        audioStatus.speakerLayouts["Universal Audio Thunderbolt"] = ["LINE 1", "LINE 2"]
+        let checker = makeChecker(audioStatus: audioStatus)
+
+        let results = checker.check(for: profileWithChannels)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .error("Haut-parleurs : LINE 1, LINE 2"))
+    }
+
+    func test_outputChannels_okWhenTheSpeakerLayoutMatchesThePair() {
+        let profileWithChannels = Profile(
+            name: "Studio", deviceNameMatch: "Thunderbolt 3 Option Card", audioDeviceName: "Universal Audio Thunderbolt",
+            uadConsoleSession: "s", daws: [],
+            expectedOutputChannelNames: ["VIRTUAL 1", "VIRTUAL 2"]
+        )
+        let audioStatus = MockAudioDeviceStatusProvider()
+        audioStatus.outputChannels["Universal Audio Thunderbolt"] = ["VIRTUAL 1", "VIRTUAL 2"]
+        audioStatus.speakerLayouts["Universal Audio Thunderbolt"] = ["VIRTUAL 1", "VIRTUAL 2"]
+        let checker = makeChecker(audioStatus: audioStatus)
+
+        let results = checker.check(for: profileWithChannels)
+
+        XCTAssertEqual(results.first(where: { $0.label == "Canaux de sortie" })?.status, .ok)
     }
 
     func test_outputChannels_errorsWhenChannelsCannotBeRead() {

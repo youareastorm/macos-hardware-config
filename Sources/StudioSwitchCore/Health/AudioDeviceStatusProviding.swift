@@ -15,4 +15,13 @@ public protocol AudioDeviceStatusProviding {
     /// 5/6), for presenting as choices — not just the one currently active. Empty when the device
     /// is offline or reports no output channels.
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair]
+
+    /// Names of the channels Audio MIDI Setup's speaker layout ("Configure Speakers") labels left and
+    /// right — what apps actually play stereo to, which can differ from the stereo pair. `nil` when
+    /// the device is offline or has no layout labelling both.
+    func speakerLayoutChannelNames(forDeviceNamed deviceName: String) -> [String]?
+}
+
+public extension AudioDeviceStatusProviding {
+    func speakerLayoutChannelNames(forDeviceNamed deviceName: String) -> [String]? { nil }
 }

@@ -104,6 +104,7 @@ private final class RecordingLogger: ActivationLogging {
 private final class ChangingChannelStatus: AudioDeviceStatusProviding {
     var pairs: [ChannelPair] = []
     var current: [String] = ["MON L", "MON R"]
+    var speakers: [String]?
     func isDeviceOnline(named deviceName: String) -> Bool { true }
     func nominalSampleRate(forDeviceNamed deviceName: String) -> Double? { nil }
     func defaultOutputDeviceName() -> String? { nil }
@@ -111,6 +112,7 @@ private final class ChangingChannelStatus: AudioDeviceStatusProviding {
     func builtInOutputDeviceName() -> String? { nil }
     func outputChannelNames(forDeviceNamed deviceName: String) -> [String]? { current }
     func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] { pairs }
+    func speakerLayoutChannelNames(forDeviceNamed deviceName: String) -> [String]? { speakers }
 }
 
 private final class PairApplyingConfigurator: AudioMIDIConfiguring {
@@ -123,7 +125,15 @@ private final class PairApplyingConfigurator: AudioMIDIConfiguring {
     func setPreferredOutputChannelPair(_ pair: ChannelPair, forDeviceNamed deviceName: String) throws {
         applyCount += 1
         status.current = [pair.firstName, pair.secondName]
+        status.speakers = [pair.firstName, pair.secondName]
     }
+}
+
+/// Leaves the stereo pair alone but moves the speaker layout, so only the layout is wrong.
+private final class LayoutResettingConsole: UADConsoleSessionEnsuring {
+    let status: ChangingChannelStatus
+    init(status: ChangingChannelStatus) { self.status = status }
+    func ensureSessionOpen(atPath path: String) throws { status.speakers = ["LINE 1", "LINE 2"] }
 }
 
 private final class PairResettingConsole: UADConsoleSessionEnsuring {
@@ -401,6 +411,22 @@ final class ProfileActivationControllerTests: XCTestCase {
             uadConsole: PairResettingConsole(status: status), logger: logger
         )
         return (status, configurator, logger, controller, pairProfile)
+    }
+
+    func test_activate_reappliesWhenOnlyTheSpeakerLayoutMovedDuringTheUADSteps() {
+        let (status, configurator, _, _, pairProfile) = pairResetScenario()
+        let detector = MockDetector()
+        detector.matchedName = "Apollo Solo"
+        let controller = ProfileActivationController(
+            detector: detector, configurator: configurator, channelStatus: status,
+            uadConsole: LayoutResettingConsole(status: status)
+        )
+
+        let result = controller.activate(pairProfile)
+
+        XCTAssertEqual(status.speakers, ["VIRTUAL 1", "VIRTUAL 2"])
+        XCTAssertEqual(configurator.applyCount, 2)
+        XCTAssertNil(result.channelPairError)
     }
 
     func test_activate_reappliesThePairWhenLaunchingUADConsoleResetIt() {

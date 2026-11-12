@@ -66,7 +66,7 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
 
     public func availableOutputChannelPairs(forDeviceNamed deviceName: String) -> [ChannelPair] {
         guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: .output) else { return [] }
-        let channelCount = outputChannelCount(for: deviceID)
+        let channelCount = SpeakerLayout.outputChannelCount(of: deviceID)
         guard channelCount >= 2 else { return [] }
 
         var pairs: [ChannelPair] = []
@@ -80,22 +80,10 @@ public final class CoreAudioStatusProvider: AudioDeviceStatusProviding {
         return pairs
     }
 
-    private func outputChannelCount(for deviceID: AudioDeviceID) -> UInt32 {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var dataSize: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == noErr, dataSize > 0 else { return 0 }
-
-        let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: Int(dataSize))
-        defer { bufferListPointer.deallocate() }
-
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, bufferListPointer) == noErr else { return 0 }
-
-        let bufferList = UnsafeMutableAudioBufferListPointer(bufferListPointer)
-        return bufferList.reduce(into: UInt32(0)) { total, buffer in total += buffer.mNumberChannels }
+    public func speakerLayoutChannelNames(forDeviceNamed deviceName: String) -> [String]? {
+        guard let deviceID = deviceProvider.deviceID(named: deviceName, direction: .output),
+              let channels = SpeakerLayout.leftAndRightChannels(of: deviceID) else { return nil }
+        return [channels.left, channels.right].map { channelName(forDeviceID: deviceID, channel: $0) ?? "Canal \($0)" }
     }
 
     private func channelName(forDeviceID deviceID: AudioDeviceID, channel: UInt32) -> String? {
