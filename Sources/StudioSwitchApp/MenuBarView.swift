@@ -5,7 +5,6 @@ import StudioSwitchCore
 struct MenuBarView: View {
     @State private var profiles: [Profile] = []
     @State private var activeProfile: Profile?
-    @State private var lastResult: ProfileActivationResult?
     @State private var loadError: String?
     @State private var dawLaunchMessage: String?
     @State private var showingNewProfileForm = false
@@ -59,8 +58,9 @@ struct MenuBarView: View {
                 }
             }
 
-            // A click's result, or else what the last automatic activation (plug-in, startup) did.
-            if let result = lastResult ?? status.lastActivation {
+            // The most recent activation, clicked or automatic (plug-in, startup): both are recorded
+            // there, so a failed click doesn't hide a later automatic activation that worked.
+            if let result = status.lastActivation {
                 Divider()
                 statusText(for: result)
             }
@@ -131,7 +131,6 @@ struct MenuBarView: View {
             let result = activationController.activate(profile)
             StatusMonitor.shared.recordActivation(result)
             DispatchQueue.main.async {
-                lastResult = result
                 activeProfile = result.deviceDetected ? profile : nil
                 refreshHealth(for: profile)
             }
